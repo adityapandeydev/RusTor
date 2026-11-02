@@ -73,7 +73,7 @@ pub enum TorrentState {
     Failed,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TorrentSnapshot {
     pub id: TorrentId,
     pub name: Option<String>,

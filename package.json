@@ -1,0 +1,18 @@
+{
+  "name": "rustor",
+  "private": true,
+  "packageManager": "bun@1.3.5",
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "overrides": {
+    "minimatch": "^11.0.1"
+  },
+  "scripts": {
+    "desktop:dev": "bun run --cwd apps/desktop tauri dev",
+    "desktop:build": "bun run --cwd apps/desktop tauri build --no-bundle",
+    "check": "bun run --cwd apps/desktop check",
+    "test": "bun run --cwd apps/desktop test",
+    "build": "bun run --cwd apps/desktop build"
+  }
+}

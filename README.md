@@ -1,8 +1,8 @@
 # RusTor
 
-A Rust-powered desktop BitTorrent application in development, with a React and TypeScript interface planned through Tauri 2.
+A Rust-powered desktop BitTorrent application in development, with a React and TypeScript interface delivered through Tauri 2.
 
-Status: native engine foundation implemented and tested on Windows. The desktop interface and search providers are not implemented yet; there is no desktop release.
+Status: the native engine and first desktop Downloads screen are implemented. Local transfer and service tests run on Windows. Search providers, advanced queue management, and release installers are not implemented yet.
 
 Frontend: React, TypeScript, Bun, Vite, and Tailwind CSS v4. The backend will port Torlink's useful non-TUI behavior into Rust, using a proven torrent protocol library where suitable.
 
@@ -22,7 +22,31 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-This is a library foundation, with no end-user CLI or TUI. The next product step is the Tauri bridge and desktop download flow. Searchable-content coverage will be added through provider integrations; the torrent library does not supply a catalog.
+## Desktop development
+
+The dark Downloads screen connects to the real Rust session through Tauri commands and live snapshots. It includes magnet/infohash entry, native `.torrent` and destination pickers, transfer filters, progress and speed reporting, details, and pause/resume controls. File reads stay in Rust and use handles returned by the native picker; the frontend cannot submit an arbitrary file path. There is no end-user CLI or TUI.
+
+Install Bun 1.3.5, a current Node.js development runtime compatible with Vite, Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). Windows needs the Microsoft C++ build tools and WebView2. Node.js and Bun are development tools and are not bundled as application runtimes.
+
+```sh
+bun install --frozen-lockfile
+bun run desktop:dev
+```
+
+Checks and standalone desktop build:
+
+```sh
+bun run check
+bun run test
+bun run build
+bun run desktop:build --debug
+```
+
+The desktop build embeds the frontend and produces an executable without an installer. Omitting `--debug` builds in release mode. Opening the Vite URL in a browser shows an explicitly labeled layout preview; actual downloads require the desktop application. The engine uses the OS application-data directory and defaults to `Downloads/RusTor` for payloads. Closing the app stops the engine; it does not continue downloading in a tray process.
+
+Validation so far includes the native window rendering with an engine-ready response, frontend behavior tests, and a desktop-service integration test that selects handles, downloads generated data from a loopback peer, verifies bytes, and pauses/resumes. A complete native picker-to-download UI automation pass and macOS/Linux validation remain outstanding. GitHub Actions runs the Windows checks and debug executable build.
+
+Searchable-content coverage will be added through provider integrations; the torrent library does not supply a catalog. Drag-and-drop, notifications, light theme, deletion, retry controls, file selection, and download queue policies are follow-up work.
 
 ## Acknowledgements
 
