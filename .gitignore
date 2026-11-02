@@ -1,0 +1,17 @@
+# Build outputs and project dependencies
+/target/
+**/node_modules/
+**/dist/
+**/coverage/
+**/src-tauri/gen/
+
+# Local state, credentials, and generated tooling (also keep outside this repo)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+graphify-out/
+strix_runs/
+.DS_Store
+Thumbs.db
