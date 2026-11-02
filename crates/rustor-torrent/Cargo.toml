@@ -1,0 +1,18 @@
+[package]
+name = "rustor-torrent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "RusTor's native torrent session adapter"
+publish = false
+
+[dependencies]
+librqbit.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
