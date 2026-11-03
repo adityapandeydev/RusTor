@@ -1,0 +1,19 @@
+[package]
+name = "rustor-search"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Provider-independent torrent search orchestration for RusTor"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+url.workspace = true
+data-encoding = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

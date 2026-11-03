@@ -22,6 +22,14 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
+## Search foundation
+
+The `rustor-search` crate provides validated result contracts and an asynchronous provider interface independent of the torrent engine. It normalizes hex/base32 v1 identities, deduplicates torrents while preserving the winning magnet's existing parameters and merging trackers, retains source attribution and missing metadata, distinguishes unknown swarm health from known zero seeders, and supports category selection, text matching, and explicit ordering. Equal-health merges use deterministic tie breakers instead of provider completion order.
+
+The service publishes the latest progressive snapshot, isolates provider failures/panics/timeouts, and applies per-provider and overall deadlines. Starting a new search cancels its predecessor; dropping its handle aborts outstanding work. Concurrency is shared across superseded searches. Defaults are four active provider tasks, 15-second provider and 30-second overall deadlines, 100 candidates per provider, and 500 displayed results. Registration is capped at 32 providers, accepted candidates at 3,200, magnets at 16 KiB, and merged trackers at 64; truncation/rejection is reported. Provider implementations must also bound their own HTTP response decoding and use cooperative, nonblocking futures.
+
+This increment has **no live provider adapters, HTTP fetching, search cache, Tauri search bridge, or Discover screen**. It does not yet supply searchable content in the application. Tests use synthetic providers and paused Tokio time, with no public-network dependency. Provider adapters and the desktop search-to-download flow are the next increments.
+
 ## Desktop development
 
 The Downloads screen connects to the real Rust session through Tauri commands and live snapshots. It includes magnet/infohash entry, native `.torrent` and destination pickers, transfer filters, progress and speed reporting, details, and pause/resume, stop/remove, and failed-transfer retry controls. Failed transfers show recovery guidance and expandable engine error details without opening the row. Retry rechecks existing data in place and retains the destination and file selection. The × action stops downloading or seeding and removes the torrent from the saved session while keeping complete and partial files on disk. Dark mode uses navy surfaces with peach accents; a matching warm light mode is available from the header toggle, and the appearance preference is saved locally. The add flow loads metadata first, then lets you choose files and review their total size before starting. Large lists support search and pagination. Selections survive session restoration; skipped files can still receive data from shared torrent pieces. New previews currently support up to 10,000 files. File reads stay in Rust and use handles returned by the native picker; the frontend cannot submit an arbitrary file path. There is no end-user CLI or TUI.
@@ -56,7 +64,36 @@ Searchable-content coverage will be added through provider integrations; the tor
 
 RusTor is an independent project inspired by [Torlink](https://github.com/baairon/torlink), developed by bairon.dev and its contributors. Its search, torrent-management, and persistence behavior provides the foundation for our planned Rust port. RusTor is not an official Torlink release and does not develop or ship its TUI.
 
-Torlink is licensed under the MIT License, copyright 2026 bairon.dev. RusTor's input normalization and lifecycle behavior are informed by its magnet, queue, and persistence implementations. No Torlink source is vendored here. As source is directly adapted, this section will identify those portions and applicable notices will be preserved.
+Torlink is licensed under the MIT License, copyright 2026 bairon.dev. RusTor's input normalization and lifecycle behavior are informed by its magnet, queue, and persistence implementations. The Rust search contracts, tracker-preserving duplicate merge, ordering, and token matching in `crates/rustor-search` port behavior from Torlink's [source types](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/types.ts), [deduplication](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/dedupe.ts), [sorting](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/sort.ts), [filtering](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/filter.ts), and [magnet helpers](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/magnet.ts) at revision `df059311d0898b7245dd842153c1ff7c892275ee`. Its TypeScript source and terminal UI are not distributed. The applicable upstream notice is retained here:
+
+<details>
+<summary>Torlink MIT License notice</summary>
+
+```text
+MIT License
+
+Copyright (c) 2026 bairon.dev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+</details>
 
 The native protocol implementation is provided by [librqbit / rqbit](https://github.com/ikatson/rqbit), developed by Igor Katson and contributors and licensed under Apache-2.0. Our local transfer tests draw on its public API examples and testing approach. RusTor does not claim authorship of that protocol implementation.
 
