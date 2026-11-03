@@ -624,13 +624,6 @@ progress::-moz-progress-bar {
 .infohash {
   font-variant-numeric: tabular-nums;
 }
-.torrent-error {
-  font-size: 11px;
-  line-height: 1.8;
-  color: var(--danger);
-  overflow-wrap: anywhere;
-  margin-bottom: 0;
-}
 .page-footer {
   display: flex;
   justify-content: space-between;
@@ -904,4 +897,68 @@ progress::-moz-progress-bar {
   padding: 8px 10px;
   font-size: 12px;
   margin-bottom: 12px;
+}
+
+.transfer-failure {
+  margin: 0 0 20px 31px;
+  padding: 16px;
+  background: var(--danger-surface);
+  border-radius: var(--radius);
+}
+.failure-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.failure-heading h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  margin: 0;
+}
+.failure-heading p {
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 7px 0 0;
+  max-width: 65ch;
+}
+.retry-button {
+  color: var(--danger);
+  border-color: currentColor;
+}
+.retry-button:hover:not(:disabled) {
+  background: var(--danger-hover);
+  color: var(--danger-ink);
+}
+.failure-details {
+  color: var(--danger);
+  font-size: 11px;
+  margin-top: 12px;
+}
+.failure-details summary {
+  cursor: pointer;
+  width: fit-content;
+  padding-block: 4px;
+}
+.failure-details summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+.failure-details p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.8;
+  margin: 8px 0 0;
+  user-select: text;
+}
+@media (max-width: 680px) {
+  .transfer-failure {
+    margin-left: 0;
+  }
+  .failure-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 }

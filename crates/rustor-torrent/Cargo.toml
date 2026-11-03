@@ -8,6 +8,7 @@ description = "RusTor's native torrent session adapter"
 publish = false
 
 [dependencies]
+anyhow = "1"
 librqbit.workspace = true
 serde.workspace = true
 thiserror.workspace = true

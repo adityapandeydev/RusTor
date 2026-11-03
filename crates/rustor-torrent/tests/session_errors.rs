@@ -78,6 +78,8 @@ async fn unknown_torrent_and_stopped_engine_return_typed_errors() {
     let id = TorrentId::parse("0123456789abcdef0123456789abcdef01234567").unwrap();
     assert!(matches!(engine.snapshot(&id).await, Err(Error::NotFound)));
     assert!(matches!(engine.pause(&id).await, Err(Error::NotFound)));
+    assert!(matches!(engine.retry(&id).await, Err(Error::NotFound)));
     engine.shutdown().await.unwrap();
     assert!(matches!(engine.resume(&id).await, Err(Error::Stopped)));
+    assert!(matches!(engine.retry(&id).await, Err(Error::Stopped)));
 }

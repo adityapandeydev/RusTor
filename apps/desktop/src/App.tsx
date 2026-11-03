@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   Radio,
+  RotateCcw,
   Search,
   Sun,
   Moon,
@@ -241,18 +242,20 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
 
   async function control(torrent: Torrent, remove = false) {
     setError(null);
+    setNotice("");
     setBusy((current) => new Set(current).add(torrent.id));
     try {
-      await (remove
-        ? api.remove(torrent.id)
-        : torrent.state === "paused"
-          ? api.resume(torrent.id)
-          : api.pause(torrent.id));
+      if (remove) await api.remove(torrent.id);
+      else if (torrent.state === "failed") await api.retry(torrent.id);
+      else if (torrent.state === "paused") await api.resume(torrent.id);
+      else await api.pause(torrent.id);
       if (mounted.current) {
         if (remove)
           setNotice(
             "Torrent stopped and removed. Files kept in your download folder.",
           );
+        if (!remove && torrent.state === "failed")
+          setNotice("Retry started. RusTor is checking the existing files.");
         accept(await api.snapshot());
       }
     } catch (reason) {
@@ -709,6 +712,41 @@ function TorrentRow({
           </button>
         </div>
       </div>
+      {torrent.state === "failed" && (
+        <section
+          className="transfer-failure"
+          aria-label={`${name} transfer failure`}
+        >
+          <div className="failure-heading">
+            <div>
+              <h3>Transfer stopped</h3>
+              <p>
+                Check that the download folder is available, writable, and has
+                free space, then retry.
+              </p>
+            </div>
+            <button
+              className="button secondary retry-button"
+              aria-label={`Retry ${name}`}
+              disabled={busy}
+              onClick={onControl}
+            >
+              {busy ? (
+                <LoaderCircle className="spin" size={15} aria-hidden="true" />
+              ) : (
+                <RotateCcw size={15} aria-hidden="true" />
+              )}
+              {busy ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+          {torrent.error && (
+            <details className="failure-details">
+              <summary>Engine error details</summary>
+              <p>{torrent.error}</p>
+            </details>
+          )}
+        </section>
+      )}
       {expanded && (
         <div className="torrent-details">
           <dl>
@@ -729,7 +767,6 @@ function TorrentRow({
               <dd>{bytes(torrent.uploaded_bytes)}</dd>
             </div>
           </dl>
-          {torrent.error && <p className="torrent-error">{torrent.error}</p>}
         </div>
       )}
     </article>

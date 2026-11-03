@@ -112,6 +112,14 @@ async fn resume_torrent(
 }
 
 #[tauri::command]
+async fn retry_torrent(
+    id: String,
+    state: tauri::State<'_, Arc<DesktopState>>,
+) -> Result<(), CommandError> {
+    state.retry(&id).await
+}
+
+#[tauri::command]
 async fn remove_torrent(
     id: String,
     state: tauri::State<'_, Arc<DesktopState>>,
@@ -131,7 +139,8 @@ pub fn run() {
             start_prepared,
             pause_torrent,
             resume_torrent,
-            remove_torrent
+            remove_torrent,
+            retry_torrent
         ])
         .setup(|app| {
             let download_dir = app.path().download_dir()?.join("RusTor");

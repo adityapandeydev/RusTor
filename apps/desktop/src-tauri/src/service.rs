@@ -358,6 +358,13 @@ impl DesktopState {
             .map_err(Into::into)
     }
 
+    pub async fn retry(&self, id: &str) -> Result<(), CommandError> {
+        self.engine()?
+            .retry(&TorrentId::parse(id)?)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn remove(&self, id: &str) -> Result<(), CommandError> {
         self.engine()?
             .remove(&TorrentId::parse(id)?)
@@ -562,6 +569,11 @@ mod tests {
             rustor_torrent::TorrentState::Paused
         );
         state.resume(added.id.as_str()).await.unwrap();
+        assert_eq!(
+            state.retry(added.id.as_str()).await.unwrap_err().code,
+            "invalid_input"
+        );
+        assert_eq!(state.snapshot().await.torrents.len(), 1);
         state.remove(added.id.as_str()).await.unwrap();
         assert!(state.snapshot().await.torrents.is_empty());
         assert_eq!(

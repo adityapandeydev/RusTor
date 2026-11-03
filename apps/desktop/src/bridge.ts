@@ -60,6 +60,7 @@ export interface DesktopApi {
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
   remove(id: string): Promise<void>;
+  retry(id: string): Promise<void>;
 }
 
 export const desktop: DesktopApi = {
@@ -82,6 +83,7 @@ export const desktop: DesktopApi = {
   pause: (id) => invoke("pause_torrent", { id }),
   resume: (id) => invoke("resume_torrent", { id }),
   remove: (id) => invoke("remove_torrent", { id }),
+  retry: (id) => invoke("retry_torrent", { id }),
 };
 
 export function errorMessage(error: unknown): string {
