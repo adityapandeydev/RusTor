@@ -14,6 +14,9 @@ tokio.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 url.workspace = true
 data-encoding = "2"
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
+roxmltree = "=0.21.2"
+chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util", "io-util"] }
