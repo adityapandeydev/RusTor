@@ -1,7 +1,7 @@
 use crate::service::CommandError;
 use rustor_search::{
     SearchConfig, SearchHandle, SearchQuery, SearchRequest, SearchService, SearchSnapshot,
-    providers::NyaaProvider,
+    providers::desktop_providers,
 };
 use std::sync::{
     Arc,
@@ -18,10 +18,8 @@ pub struct DesktopSearch {
 }
 impl DesktopSearch {
     pub fn new() -> Self {
-        let service = NyaaProvider::new()
-            .and_then(|provider| {
-                SearchService::new(vec![Arc::new(provider)], SearchConfig::default())
-            })
+        let service = desktop_providers()
+            .and_then(|providers| SearchService::new(providers, SearchConfig::default()))
             .map_err(|_| {
                 CommandError::new(
                     "search_unavailable",

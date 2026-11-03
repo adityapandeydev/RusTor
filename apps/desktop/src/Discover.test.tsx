@@ -68,20 +68,32 @@ describe("Discover", () => {
     expect(choose).toHaveBeenCalledWith(row);
     expect(screen.queryByText("Unknown size", { exact: true })).toBeNull();
   });
-  it("retains all category filters and explains categories without a provider", async () => {
-    const { api } = setup();
+  it("uses connected Movies and TV providers and explains a category with none", async () => {
+    const start = vi
+      .fn()
+      .mockImplementation(async (_query, category) =>
+        category === "games" ? { ...done, providers: [], results: [] } : done,
+      );
+    const { api } = setup({ start });
     await submit();
-    await userEvent.click(screen.getByRole("button", { name: "Movies" }));
-    expect(api.start).toHaveBeenLastCalledWith("collection", "movies");
-    expect(screen.getByText("Movies sources are coming next")).toBeTruthy();
+    for (const label of ["Movies", "TV", "Anime"]) {
+      await userEvent.click(screen.getByRole("button", { name: label }));
+      expect(
+        await screen.findByRole("button", { name: "Choose files" }),
+      ).toBeTruthy();
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Games" }));
+    expect(
+      await screen.findByText("Games sources are coming next"),
+    ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Choose files" })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "TV" }));
-    expect(screen.getByText("TV sources are coming next")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Games" })).toBeTruthy();
     await userEvent.click(
-      screen.getByRole("button", { name: "Explore Anime" }),
+      screen.getByRole("button", { name: "Search all sources" }),
     );
-    expect(api.start).toHaveBeenLastCalledWith("collection", "anime");
+    expect(api.start).toHaveBeenLastCalledWith("collection", null);
+    expect(
+      await screen.findByRole("button", { name: "Choose files" }),
+    ).toBeTruthy();
   });
   it("preserves unknown health when hiding dead torrents and keeps the filter reversible", async () => {
     setup(

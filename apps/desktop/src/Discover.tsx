@@ -62,6 +62,9 @@ export function Discover({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<SearchCategory | null>(null);
   const [snapshot, setSnapshot] = useState<SearchSnapshot | null>(null);
+  const [resultCategory, setResultCategory] = useState<SearchCategory | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [sort, setSort] = useState("relevance");
@@ -115,6 +118,7 @@ export function Discover({
         return;
       }
       activeId.current = next.id;
+      setResultCategory(nextCategory);
       setSnapshot(next);
     } catch (reason) {
       if (generation.current === ticket) setError(errorMessage(reason));
@@ -131,10 +135,16 @@ export function Discover({
     }
   }
   const running = starting || (snapshot?.phase === "running" && !error);
-  const unsupported = category !== null && category !== "anime";
-  const rows = (unsupported ? [] : (snapshot?.results ?? [])).filter(
-    (row) => !hideDead || row.seeders !== 0 || row.has_unknown_health,
-  );
+  const matchesCategory = resultCategory === category;
+  const unsupported =
+    category !== null &&
+    matchesCategory &&
+    !starting &&
+    snapshot?.phase === "completed" &&
+    snapshot.providers.length === 0;
+  const rows = (
+    !matchesCategory || unsupported ? [] : (snapshot?.results ?? [])
+  ).filter((row) => !hideDead || row.seeders !== 0 || row.has_unknown_health);
   if (sort !== "relevance")
     rows.sort((a, b) => {
       const left =
@@ -222,17 +232,17 @@ export function Discover({
             coming next
           </h2>
           <p>
-            This category is ready for providers. The current source, Nyaa, is
-            listed under Anime.
+            Sources for this category have not been connected yet. Search all
+            sources to explore the available results.
           </p>
           <button
             className="button secondary"
             onClick={() => {
-              setCategory("anime");
-              if (snapshot) void search(undefined, "anime");
+              setCategory(null);
+              if (snapshot) void search(undefined, null);
             }}
           >
-            Explore Anime
+            Search all sources
           </button>
         </div>
       ) : (
@@ -422,12 +432,6 @@ export function Discover({
                       ? "Try a different title or a shorter search. Source status is shown above."
                       : "Search a title, compare swarm health, then choose the files you want to download."}
               </p>
-              {!snapshot && (
-                <span className="empty-caption">
-                  Nyaa is the first connected source. More providers are on the
-                  way.
-                </span>
-              )}
             </div>
           )}
         </>
