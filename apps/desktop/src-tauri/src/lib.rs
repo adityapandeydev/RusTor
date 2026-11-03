@@ -92,6 +92,14 @@ async fn resume_torrent(
     state.resume(&id).await
 }
 
+#[tauri::command]
+async fn remove_torrent(
+    id: String,
+    state: tauri::State<'_, Arc<DesktopState>>,
+) -> Result<(), CommandError> {
+    state.remove(&id).await
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -101,7 +109,8 @@ pub fn run() {
             pick_destination,
             add_torrent,
             pause_torrent,
-            resume_torrent
+            resume_torrent,
+            remove_torrent
         ])
         .setup(|app| {
             let download_dir = app.path().download_dir()?.join("RusTor");

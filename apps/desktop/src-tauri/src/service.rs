@@ -281,6 +281,13 @@ impl DesktopState {
             .map_err(Into::into)
     }
 
+    pub async fn remove(&self, id: &str) -> Result<(), CommandError> {
+        self.engine()?
+            .remove(&TorrentId::parse(id)?)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn shutdown(&self) {
         self.stopping.store(true, Ordering::Release);
         self.initialize().await;
@@ -430,6 +437,14 @@ mod tests {
             rustor_torrent::TorrentState::Paused
         );
         state.resume(added.id.as_str()).await.unwrap();
+        state.remove(added.id.as_str()).await.unwrap();
+        assert!(state.snapshot().await.torrents.is_empty());
+        assert_eq!(
+            tokio::fs::read(destination.join("authorized.bin"))
+                .await
+                .unwrap(),
+            data
+        );
         state.shutdown().await;
         seeder.stop().await;
     }

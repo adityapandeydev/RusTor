@@ -4,7 +4,10 @@ import userEvent from "@testing-library/user-event";
 import App from "./App";
 import type { DesktopApi, Snapshot, Torrent } from "./bridge";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 const initial: Snapshot = {
   revision: 1,
   phase: "ready",
@@ -29,6 +32,7 @@ function api(snapshot = initial) {
       .mockResolvedValue({ id: "torrent-id", already_managed: false }),
     pause: vi.fn().mockResolvedValue(undefined),
     resume: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
   };
   return { service, emit: (value: Snapshot) => receive(value), unsubscribe };
 }
@@ -140,4 +144,54 @@ describe("Downloads desktop flow", () => {
     expect(screen.getByText(/Open RusTor as a desktop app/)).toBeDefined();
     expect(service.snapshot).not.toHaveBeenCalled();
   });
+});
+
+it("removes a seeder from the session and explains that files are kept", async () => {
+  const { service } = api({
+    ...initial,
+    torrents: [{ ...torrent, state: "seeding" }],
+  });
+  render(<App api={service} />);
+  const remove = await screen.findByRole("button", {
+    name: "Stop and remove Authorized fixture.bin (keep files)",
+  });
+  vi.mocked(service.snapshot).mockResolvedValue({ ...initial, revision: 2 });
+  await userEvent.click(remove);
+  await waitFor(() =>
+    expect(screen.queryByText("Authorized fixture.bin")).toBeNull(),
+  );
+  expect(service.remove).toHaveBeenCalledWith("abc");
+  expect(screen.getByRole("status").textContent).toContain("Files kept");
+});
+
+it("keeps a failed removal visible and allows retry", async () => {
+  const { service } = api({ ...initial, torrents: [torrent] });
+  vi.mocked(service.remove).mockRejectedValue({
+    message: "Could not remove torrent. Try again.",
+  });
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: /Stop and remove Authorized/ }),
+  );
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "Could not remove",
+  );
+  expect(screen.getByText("Authorized fixture.bin")).toBeDefined();
+});
+
+it("restores a saved light theme across remounts", async () => {
+  const { service } = api();
+  const view = render(<App api={service} />);
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Switch to light mode" }),
+  );
+  expect(document.documentElement.dataset.theme).toBe("light");
+  view.unmount();
+  render(<App api={service} />);
+  expect(document.documentElement.dataset.theme).toBe("light");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Switch to dark mode" }),
+  );
+  expect(localStorage.getItem("rustor-theme")).toBe("dark");
 });

@@ -17,6 +17,8 @@ import {
   Plus,
   Radio,
   Search,
+  Sun,
+  Moon,
   X,
 } from "lucide-react";
 import { desktop, errorMessage } from "./bridge";
@@ -39,6 +41,23 @@ const labels: Record<TorrentState, string> = {
 type Filter = "all" | "downloading" | "paused" | "seeding";
 
 export default function App({ api = desktop }: { api?: DesktopApi }) {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try {
+      return localStorage.getItem("rustor-theme") === "light"
+        ? "light"
+        : "dark";
+    } catch {
+      return "dark";
+    }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("rustor-theme", theme);
+    } catch {
+      /* Appearance still works without storage. */
+    }
+  }, [theme]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -171,14 +190,22 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
     }
   }
 
-  async function control(torrent: Torrent) {
+  async function control(torrent: Torrent, remove = false) {
     setError(null);
     setBusy((current) => new Set(current).add(torrent.id));
     try {
-      await (torrent.state === "paused"
-        ? api.resume(torrent.id)
-        : api.pause(torrent.id));
-      if (mounted.current) accept(await api.snapshot());
+      await (remove
+        ? api.remove(torrent.id)
+        : torrent.state === "paused"
+          ? api.resume(torrent.id)
+          : api.pause(torrent.id));
+      if (mounted.current) {
+        if (remove)
+          setNotice(
+            "Torrent stopped and removed. Files kept in your download folder.",
+          );
+        accept(await api.snapshot());
+      }
     } catch (reason) {
       if (mounted.current) setError(errorMessage(reason));
     } finally {
@@ -274,17 +301,31 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
             <h1>Downloads</h1>
             <p>Manage your downloads and sharing.</p>
           </div>
-          <button
-            className="button primary"
-            disabled={!ready || adding || choosing}
-            onClick={() => {
-              setOpen(!open);
-              setError(null);
-            }}
-          >
-            <Plus size={17} aria-hidden="true" />
-            Add torrent
-          </button>
+          <div className="header-actions">
+            <button
+              className="icon-button theme-toggle"
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? (
+                <Sun size={18} aria-hidden="true" />
+              ) : (
+                <Moon size={18} aria-hidden="true" />
+              )}
+            </button>
+            <button
+              className="button primary"
+              disabled={!ready || adding || choosing}
+              onClick={() => {
+                setOpen(!open);
+                setError(null);
+              }}
+            >
+              <Plus size={17} aria-hidden="true" />
+              Add torrent
+            </button>
+          </div>
         </header>
         <section
           className="transfer-strip"
@@ -448,6 +489,7 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
                 torrent={torrent}
                 busy={busy.has(torrent.id)}
                 onControl={() => void control(torrent)}
+                onRemove={() => void control(torrent, true)}
               />
             ))}
           </div>
@@ -508,10 +550,12 @@ function TorrentRow({
   torrent,
   busy,
   onControl,
+  onRemove,
 }: {
   torrent: Torrent;
   busy: boolean;
   onControl: () => void;
+  onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const name = torrent.name || torrent.id;
@@ -559,22 +603,33 @@ function TorrentRow({
             {bytes(torrent.upload_bytes_per_second)}/s
           </span>
         </div>
-        {torrent.state !== "failed" && (
+        <div className="torrent-actions">
+          {torrent.state !== "failed" && (
+            <button
+              className="icon-button control-button"
+              aria-label={`${torrent.state === "paused" ? "Resume" : "Pause"} ${name}`}
+              disabled={busy}
+              onClick={onControl}
+            >
+              {busy ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : torrent.state === "paused" ? (
+                <Play size={17} />
+              ) : (
+                <Pause size={17} />
+              )}
+            </button>
+          )}
           <button
-            className="icon-button control-button"
-            aria-label={`${torrent.state === "paused" ? "Resume" : "Pause"} ${name}`}
+            className="icon-button remove-button"
+            aria-label={`Stop and remove ${name} (keep files)`}
+            title="Stop and remove torrent · keep files"
             disabled={busy}
-            onClick={onControl}
+            onClick={onRemove}
           >
-            {busy ? (
-              <LoaderCircle className="spin" size={17} />
-            ) : torrent.state === "paused" ? (
-              <Play size={17} />
-            ) : (
-              <Pause size={17} />
-            )}
+            <X size={18} aria-hidden="true" />
           </button>
-        )}
+        </div>
       </div>
       {expanded && (
         <div className="torrent-details">

@@ -6,17 +6,29 @@
 
 :root {
   font-family: "Manrope Variable", sans-serif;
-  color: #f1f2f3;
-  background: #151719;
+  color: var(--text);
+  background: var(--ground);
   color-scheme: dark;
-  --ground: #151719;
-  --surface: #1d1f21;
-  --raised: #292c2f;
-  --line: #34373a;
-  --text: #f1f2f3;
-  --muted: #afb3b8;
-  --faint: #999ea4;
-  --data: #81c7ed;
+  --ground: #181a2f;
+  --sidebar: #181a2f;
+  --surface: #242e49;
+  --raised: #37415c;
+  --line: #37415c;
+  --border-control: #7986a3;
+  --text: #f6f2ef;
+  --muted: #c3c8d8;
+  --faint: #adb6cc;
+  --data: #fda481;
+  --primary: #fda481;
+  --primary-hover: #ffb99d;
+  --primary-ink: #181a2f;
+  --danger: #ffacb8;
+  --danger-surface: #54162b;
+  --danger-hover: #b4182d;
+  --danger-ink: #fff5f5;
+  --selection: #54162b;
+  --selection-ink: #f6f2ef;
+  --track: #37415c;
   --sidebar-width: 204px;
   --canvas-pad: 32px;
   --control-height: 36px;
@@ -26,6 +38,30 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ground: #faf6f3;
+  --sidebar: #f0e7e3;
+  --surface: #fffdfb;
+  --raised: #e9dfdc;
+  --line: #d8c9c5;
+  --border-control: #8d7a79;
+  --text: #181a2f;
+  --muted: #37415c;
+  --faint: #5b6077;
+  --data: #913d28;
+  --primary: #fda481;
+  --primary-hover: #ffb99d;
+  --primary-ink: #181a2f;
+  --danger: #b4182d;
+  --danger-surface: #fbe5e7;
+  --danger-hover: #b4182d;
+  --danger-ink: #fff5f5;
+  --selection: #fda481;
+  --selection-ink: #181a2f;
+  --track: #e0d4d0;
 }
 
 * {
@@ -65,8 +101,8 @@ button:active:not(:disabled) {
   transform: translateY(1px);
 }
 ::selection {
-  background: #375263;
-  color: white;
+  background: var(--selection);
+  color: var(--selection-ink);
 }
 input {
   caret-color: var(--data);
@@ -76,7 +112,7 @@ input::placeholder {
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: #555b61 var(--ground);
+  scrollbar-color: var(--border-control) var(--ground);
 }
 
 /* At the initial 1180px window: 204px rail + 2×32px gutters + 912px canvas. */
@@ -89,7 +125,7 @@ input::placeholder {
   padding: 30px 16px 22px;
   display: flex;
   flex-direction: column;
-  background: #111315;
+  background: var(--sidebar);
   min-width: 0;
 }
 .wordmark {
@@ -131,10 +167,10 @@ input::placeholder {
 }
 .nav-item:hover {
   color: var(--text);
-  background: #202225;
+  background: var(--surface);
 }
 .nav-item.selected {
-  background: #25282b;
+  background: var(--surface);
   color: var(--text);
 }
 .nav-count {
@@ -158,10 +194,10 @@ input::placeholder {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #8c9196;
+  background: var(--faint);
 }
 .connection.ready {
-  background: #c1d5c3;
+  background: var(--data);
 }
 .sidebar-bottom p {
   margin: 9px 0 22px;
@@ -216,15 +252,15 @@ h1 {
   flex-shrink: 0;
 }
 .primary {
-  background: #e9ecef;
-  color: #17191b;
+  background: var(--primary);
+  color: var(--primary-ink);
   border: 0;
 }
 .primary:hover:not(:disabled) {
-  background: white;
+  background: var(--primary-hover);
 }
 .secondary {
-  border: 1px solid #4a4e53;
+  border: 1px solid var(--border-control);
   color: var(--text);
   background: transparent;
 }
@@ -267,14 +303,14 @@ h1 {
   color: var(--muted);
 }
 .error {
-  background: #342126;
-  color: #ffbdc7;
+  background: var(--danger-surface);
+  color: var(--danger);
 }
 .success-notice {
   display: flex;
   gap: 8px;
   align-items: center;
-  color: #c1d5c3;
+  color: var(--data);
   font-size: 12px;
   margin: 20px 0 0;
 }
@@ -308,8 +344,8 @@ h2 {
   flex-shrink: 0;
 }
 .icon-button:hover:not(:disabled) {
-  background: #35393d;
-  color: white;
+  background: var(--raised);
+  color: var(--text);
 }
 .icon-button.small {
   width: 24px;
@@ -322,8 +358,8 @@ h2 {
 }
 .magnet-field {
   margin-top: 8px;
-  background: #141618;
-  border: 1px solid #50555b;
+  background: var(--ground);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius);
   display: flex;
   align-items: center;
@@ -473,7 +509,7 @@ h2 {
 }
 .torrent-main {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 155px 95px 32px;
+  grid-template-columns: minmax(150px, 1fr) 155px 95px 72px;
   align-items: center;
   gap: 20px;
   min-height: var(--row-height);
@@ -535,10 +571,10 @@ h2 {
   border: 0;
   border-radius: 2px;
   overflow: hidden;
-  background: #363a3f;
+  background: var(--track);
 }
 progress::-webkit-progress-bar {
-  background: #363a3f;
+  background: var(--track);
 }
 progress::-webkit-progress-value {
   background: var(--data);
@@ -547,10 +583,10 @@ progress::-moz-progress-bar {
   background: var(--data);
 }
 .state-paused progress::-webkit-progress-value {
-  background: #8d939a;
+  background: var(--faint);
 }
 .state-paused progress::-moz-progress-bar {
-  background: #8d939a;
+  background: var(--faint);
 }
 .torrent-rate {
   display: grid;
@@ -591,7 +627,7 @@ progress::-moz-progress-bar {
 .torrent-error {
   font-size: 11px;
   line-height: 1.8;
-  color: #ffbdc7;
+  color: var(--danger);
   overflow-wrap: anywhere;
   margin-bottom: 0;
 }
@@ -630,7 +666,7 @@ progress::-moz-progress-bar {
     --canvas-pad: 24px;
   }
   .torrent-main {
-    grid-template-columns: minmax(120px, 1fr) 130px 32px;
+    grid-template-columns: minmax(120px, 1fr) 110px 72px;
     gap: 14px;
   }
   .torrent-rate {
@@ -685,7 +721,7 @@ progress::-moz-progress-bar {
     font-size: 11px;
   }
   .torrent-main {
-    grid-template-columns: minmax(110px, 1fr) 100px 28px;
+    grid-template-columns: minmax(0, 1fr) 90px 72px;
     gap: 10px;
   }
   .file-mark {
@@ -717,5 +753,53 @@ progress::-moz-progress-bar {
   }
   .filter-field input {
     width: 105px;
+  }
+}
+
+.header-actions,
+.torrent-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header-actions {
+  flex-shrink: 0;
+}
+.torrent-actions {
+  justify-content: flex-end;
+}
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+}
+.nav-item.selected {
+  color: var(--data);
+}
+.wordmark svg {
+  color: var(--data);
+}
+.remove-button {
+  color: var(--danger);
+}
+.remove-button:hover:not(:disabled) {
+  background: var(--danger-hover);
+  color: var(--danger-ink);
+}
+@media (max-width: 480px) {
+  .page-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .header-actions {
+    gap: 4px;
+  }
+  .page-header .button {
+    padding-inline: 9px;
+  }
+  .torrent-main {
+    gap: 8px;
+  }
+  .torrent-identity {
+    gap: 4px;
   }
 }
