@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:n="https://nyaa.si/xmlns/nyaa"><channel>
+<title>Synthetic provider fixture</title>
+<item><title>Public-domain &amp; fixture &#945;</title><link>https://example.invalid/not-fetched</link>
+<n:infoHash>0123456789ABCDEF0123456789ABCDEF01234567</n:infoHash><n:seeders>12</n:seeders><n:leechers>3</n:leechers><n:size>1.5 GiB</n:size><pubDate>Mon, 01 Jan 2024 00:00:00 +0000</pubDate></item>
+<item><title><![CDATA[Second & fixture]]></title><n:infoHash>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</n:infoHash><n:seeders></n:seeders><n:leechers>unknown</n:leechers><n:size>not reported</n:size><pubDate>not a date</pubDate></item>
+<item><title>Invalid fixture identity</title><n:infoHash>bad-hash</n:infoHash><n:seeders>0</n:seeders></item>
+</channel></rss>

@@ -2,7 +2,7 @@
 
 A Rust-powered desktop BitTorrent application in development, with a React and TypeScript interface delivered through Tauri 2.
 
-Status: the native engine and first desktop Downloads screen are implemented. Local transfer and service tests run on Windows. Search providers, advanced queue management, and release installers are not implemented yet.
+Status: the native engine and first desktop Downloads screen are implemented. Local transfer and service tests run on Windows. The first search provider is available in the backend; the Discover screen, advanced queue management, and release installers are not implemented yet.
 
 Frontend: React, TypeScript, Bun, Vite, and Tailwind CSS v4. The backend will port Torlink's useful non-TUI behavior into Rust, using a proven torrent protocol library where suitable.
 
@@ -28,7 +28,13 @@ The `rustor-search` crate provides validated result contracts and an asynchronou
 
 The service publishes the latest progressive snapshot, isolates provider failures/panics/timeouts, and applies per-provider and overall deadlines. Starting a new search cancels its predecessor; dropping its handle aborts outstanding work. Concurrency is shared across superseded searches. Defaults are four active provider tasks, 15-second provider and 30-second overall deadlines, 100 candidates per provider, and 500 displayed results. Registration is capped at 32 providers, accepted candidates at 3,200, magnets at 16 KiB, and merged trackers at 64; truncation/rejection is reported. Provider implementations must also bound their own HTTP response decoding and use cooperative, nonblocking futures.
 
-This increment has **no live provider adapters, HTTP fetching, search cache, Tauri search bridge, or Discover screen**. It does not yet supply searchable content in the application. Tests use synthetic providers and paused Tokio time, with no public-network dependency. Provider adapters and the desktop search-to-download flow are the next increments.
+### Nyaa RSS provider
+
+`providers::NyaaProvider` supplies live metadata through Nyaa's public HTTPS RSS feed, using the same all-category feed query as Torlink and registering under Anime. It maps namespaced infohashes, sizes, dates, and available swarm counts into the validated search pipeline. Magnets include encoded titles and the public tracker defaults ported from Torlink; search does not contact those trackers or fetch torrent payloads. Coverage is the first RSS page, not Nyaa's entire archive. Other provider families remain pending.
+
+Requests use a fixed origin, verified TLS, no redirects or automatic retries, a 12-second HTTP deadline, and two seconds between request starts per provider instance. HTTP 429 applies a cooldown (60 seconds if no valid `Retry-After`); HTTP 503 also honors `Retry-After`. XML decoding is limited to 2 MiB, 20,000 nodes, and 101 candidates (one overflow candidate lets the service report its 100-row cap). Compressed bodies and non-XML responses are rejected; XML entity declarations are disabled. Unknown counts stay unknown and malformed candidates are counted by search validation.
+
+The adapter is **not connected to the Tauri bridge or a Discover screen yet**. It does not yet expose searchable content in the desktop interface. Automated tests use synthetic feeds and loopback HTTP, including cancellation, rate limits, query encoding, and oversized responses. An ignored `nyaa_live` test provides an opt-in public-feed metadata check; public endpoint availability can vary. Search caching and the desktop search-to-download flow remain follow-up work.
 
 ## Desktop development
 
@@ -64,7 +70,7 @@ Searchable-content coverage will be added through provider integrations; the tor
 
 RusTor is an independent project inspired by [Torlink](https://github.com/baairon/torlink), developed by bairon.dev and its contributors. Its search, torrent-management, and persistence behavior provides the foundation for our planned Rust port. RusTor is not an official Torlink release and does not develop or ship its TUI.
 
-Torlink is licensed under the MIT License, copyright 2026 bairon.dev. RusTor's input normalization and lifecycle behavior are informed by its magnet, queue, and persistence implementations. The Rust search contracts, tracker-preserving duplicate merge, ordering, and token matching in `crates/rustor-search` port behavior from Torlink's [source types](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/types.ts), [deduplication](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/dedupe.ts), [sorting](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/sort.ts), [filtering](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/filter.ts), and [magnet helpers](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/magnet.ts) at revision `df059311d0898b7245dd842153c1ff7c892275ee`. Its TypeScript source and terminal UI are not distributed. The applicable upstream notice is retained here:
+Torlink is licensed under the MIT License, copyright 2026 bairon.dev. RusTor's input normalization and lifecycle behavior are informed by its magnet, queue, and persistence implementations. The Rust search contracts, tracker-preserving duplicate merge, ordering, and token matching in `crates/rustor-search` port behavior from Torlink's [source types](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/types.ts), [deduplication](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/dedupe.ts), [sorting](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/sort.ts), [filtering](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/ui/filter.ts), [magnet helpers](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/magnet.ts), [Nyaa adapter](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/sources/nyaa.ts), and [format helpers](https://github.com/baairon/torlink/blob/df059311d0898b7245dd842153c1ff7c892275ee/src/util/format.ts) at revision `df059311d0898b7245dd842153c1ff7c892275ee`. Its TypeScript source and terminal UI are not distributed. The applicable upstream notice is retained here:
 
 <details>
 <summary>Torlink MIT License notice</summary>
