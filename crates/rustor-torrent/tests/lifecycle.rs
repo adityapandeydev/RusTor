@@ -232,3 +232,74 @@ async fn wait_for_failure(engine: &Engine, id: &rustor_torrent::TorrentId) {
     .await
     .unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_seeder_keeps_files_and_does_not_restore_it() {
+    let fixture = Fixture::new().await;
+    let root = TempDir::new().unwrap();
+    let cfg = config(root.path());
+    let engine = Engine::open(config(root.path())).await.unwrap();
+    let added = engine
+        .add(
+            TorrentInput::from_bytes(fixture.bytes.clone()).unwrap(),
+            AddOptions {
+                initial_peers: vec![fixture.peer],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    wait_for(&engine, &added.id, TorrentState::Seeding).await;
+    engine.remove(&added.id).await.unwrap();
+    assert!(engine.list().await.unwrap().is_empty());
+    assert!(matches!(
+        engine.snapshot(&added.id).await,
+        Err(Error::NotFound)
+    ));
+    assert_eq!(
+        tokio::fs::read(root.path().join("downloads/fixture.bin"))
+            .await
+            .unwrap(),
+        fixture.payload
+    );
+    engine.shutdown().await.unwrap();
+    let restored = Engine::open(cfg).await.unwrap();
+    assert!(restored.list().await.unwrap().is_empty());
+    restored.shutdown().await.unwrap();
+    fixture.session.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removes_an_incomplete_download_without_deleting_its_partial_file() {
+    let fixture = Fixture::new().await;
+    let root = TempDir::new().unwrap();
+    let cfg = config(root.path());
+    let engine = Engine::open(config(root.path())).await.unwrap();
+    let added = engine
+        .add(
+            TorrentInput::from_bytes(fixture.bytes.clone()).unwrap(),
+            AddOptions {
+                paused: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    wait_for(&engine, &added.id, TorrentState::Paused).await;
+    assert!(
+        engine.snapshot(&added.id).await.unwrap().downloaded_bytes < fixture.payload.len() as u64
+    );
+    engine.resume(&added.id).await.unwrap();
+    engine.remove(&added.id).await.unwrap();
+    assert!(engine.list().await.unwrap().is_empty());
+    assert!(root.path().join("downloads/fixture.bin").exists());
+    assert!(matches!(
+        engine.resume(&added.id).await,
+        Err(Error::NotFound)
+    ));
+    engine.shutdown().await.unwrap();
+    let restored = Engine::open(cfg).await.unwrap();
+    assert!(restored.list().await.unwrap().is_empty());
+    restored.shutdown().await.unwrap();
+    fixture.session.stop().await;
+}

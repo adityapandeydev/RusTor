@@ -285,6 +285,18 @@ impl Engine {
             .map_err(|e| backend("resume torrent", e))
     }
 
+    /// Stop downloading/seeding and forget the torrent. Payload files are always kept.
+    pub async fn remove(&self, id: &TorrentId) -> Result<(), Error> {
+        let _control = self.controls.lock().await;
+        let guard = self.session.read().await;
+        let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
+        let torrent = handle(session, id)?;
+        session
+            .delete(TorrentIdOrHash::Id(torrent.id()), false)
+            .await
+            .map_err(|e| backend("remove torrent", e))
+    }
+
     /// Idempotent. Applications must await this before exiting.
     pub async fn shutdown(&self) -> Result<(), Error> {
         let mut guard = self.session.write().await;

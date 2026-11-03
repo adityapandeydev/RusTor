@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "RusTor", "width": 1180, "height": 780, "minWidth": 720, "minHeight": 560, "backgroundColor": "#151719" }],
+    "windows": [{ "label": "main", "title": "RusTor", "width": 1180, "height": 780, "minWidth": 720, "minHeight": 560, "backgroundColor": "#181A2F" }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost",
       "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:4173 ws://127.0.0.1:4173"
