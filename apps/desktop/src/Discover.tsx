@@ -205,7 +205,6 @@ export function Discover({
             </button>
           ))}
         </div>
-        <span className="source-note">Source: Nyaa RSS</span>
       </div>
       {error && (
         <div className="error" role="alert">
@@ -314,6 +313,7 @@ export function Discover({
                 <span>Torrent</span>
                 <span>Size</span>
                 <span>Seeders</span>
+                <span>Leechers</span>
                 <span>Action</span>
               </div>
               <div className="search-results" aria-label="Search results">
@@ -352,6 +352,16 @@ export function Discover({
                         <ArrowDown size={13} aria-hidden="true" />
                         {row.seeders ?? "Unknown"}
                       </span>
+                      <span
+                        className="result-leechers"
+                        title={
+                          row.leechers === null
+                            ? "Leecher count is unknown"
+                            : `${row.leechers} reported leechers`
+                        }
+                      >
+                        {row.leechers ?? "Unknown"}
+                      </span>
                       <button
                         className="button secondary result-action"
                         disabled={!canAdd || managedIds.has(row.info_hash)}
@@ -366,7 +376,7 @@ export function Discover({
                   ))}
               </div>
               {lastPage > 0 && (
-                <div className="file-pagination">
+                <div className="file-pagination search-pagination">
                   <span>
                     Page {currentPage + 1} of {lastPage + 1}
                   </span>
@@ -422,10 +432,6 @@ export function Discover({
           )}
         </>
       )}
-      <p className="discovery-footnote">
-        Search covers the latest RSS page. Availability and seed counts come
-        from the source.
-      </p>
     </section>
   );
 }

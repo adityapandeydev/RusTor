@@ -366,27 +366,6 @@ export default function App({
             </button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="session-state">
-            <span className={ready ? "connection ready" : "connection"} />
-            {ready
-              ? "Engine ready"
-              : api.available
-                ? snapshot?.phase === "failed"
-                  ? "Engine unavailable"
-                  : "Starting engine"
-                : "Desktop preview"}
-          </div>
-          <p>Files stay on your device.</p>
-          <div className="default-folder">
-            <Folder size={14} aria-hidden="true" />
-            <span title={displayPath(snapshot?.default_destination ?? "")}>
-              {snapshot
-                ? displayPath(snapshot.default_destination)
-                : "Downloads / RusTor"}
-            </span>
-          </div>
-        </div>
       </aside>
       <main id="downloads" className="workspace">
         <header className="page-header">
@@ -715,7 +694,6 @@ export default function App({
           <span>
             RusTor <span className="version">0.1.0</span>
           </span>
-          <span>Share only what you have permission to distribute.</span>
         </footer>
       </main>
     </div>
