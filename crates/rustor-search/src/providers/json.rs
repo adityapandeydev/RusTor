@@ -1,9 +1,9 @@
-use super::{
-    http::{Http, MAX_BODY_BYTES, Media},
-    magnet,
-};
+use super::http::{Http, MAX_BODY_BYTES, Media};
+#[cfg(test)]
+use super::magnet;
+use super::metadata::*;
 use crate::{
-    Candidate, Category, InfoHash, MAX_MAGNET_BYTES, Provider, ProviderDescriptor, ProviderFailure,
+    Candidate, Category, MAX_MAGNET_BYTES, Provider, ProviderDescriptor, ProviderFailure,
     ProviderFuture, SearchError, SearchQuery,
 };
 use serde_json::Value;
@@ -152,42 +152,6 @@ impl Provider for JsonProvider {
         Box::pin(self.fetch(query))
     }
 }
-fn text(value: &Value, key: &str, max: usize) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|s| s.len() <= max)
-        .unwrap_or("")
-        .to_owned()
-}
-fn integer(value: &Value, key: &str) -> Option<u64> {
-    value.get(key).and_then(Value::as_u64)
-}
-fn count(value: &Value, key: &str) -> Option<u32> {
-    integer(value, key).and_then(|n| n.try_into().ok())
-}
-fn timestamp(value: &str) -> Option<u64> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .or_else(|_| chrono::DateTime::parse_from_rfc2822(value))
-        .ok()
-        .and_then(|date| date.timestamp_millis().try_into().ok())
-}
-fn candidate(hash: String, name: String) -> Candidate {
-    let hash = InfoHash::parse(&hash)
-        .map(|h| h.as_str().to_owned())
-        .unwrap_or(hash);
-    let magnet = magnet::build(&hash, &name);
-    Candidate {
-        info_hash: hash,
-        name,
-        magnet,
-        size_bytes: None,
-        seeders: None,
-        leechers: None,
-        file_count: None,
-        added_unix_ms: None,
-    }
-}
 fn decode(kind: Kind, body: &[u8]) -> Result<Vec<Candidate>, ProviderFailure> {
     if body.len() > MAX_BODY_BYTES {
         return Err(ProviderFailure::InvalidResponse);
@@ -326,48 +290,6 @@ fn decode(kind: Kind, body: &[u8]) -> Result<Vec<Candidate>, ProviderFailure> {
         }
     }
     Ok(out)
-}
-// Native BitTorrent supports HTTP(S)/UDP trackers, not WebTorrent's WS(S).
-// Remove only those known-incompatible tracker parameters; preserve the rest byte-for-byte.
-fn native_magnet(value: String) -> String {
-    if url::Url::parse(&value)
-        .ok()
-        .is_some_and(|url| url.fragment().is_some())
-    {
-        return value;
-    }
-    let Some(query) = value.strip_prefix("magnet:?") else {
-        return value;
-    };
-    let parts: Vec<_> = query
-        .split('&')
-        .filter(|part| {
-            !url::form_urlencoded::parse(part.as_bytes()).any(|(key, tracker)| {
-                key == "tr"
-                    && url::Url::parse(&tracker)
-                        .ok()
-                        .is_some_and(|url| matches!(url.scheme(), "ws" | "wss"))
-            })
-        })
-        .collect();
-    format!("magnet:?{}", parts.join("&"))
-}
-fn magnet_hash(value: &str) -> Option<String> {
-    if value.len() > MAX_MAGNET_BYTES {
-        return None;
-    }
-    let url = url::Url::parse(value).ok()?;
-    if url.scheme() != "magnet" {
-        return None;
-    }
-    url.query_pairs()
-        .filter(|(key, _)| key == "xt")
-        .find_map(|(_, value)| {
-            value
-                .strip_prefix("urn:btih:")
-                .and_then(|hash| InfoHash::parse(hash).ok())
-                .map(|h| h.as_str().to_owned())
-        })
 }
 #[cfg(test)]
 #[path = "json_tests.rs"]

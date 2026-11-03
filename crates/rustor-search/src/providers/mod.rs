@@ -1,5 +1,6 @@
 mod http;
 mod magnet;
+mod metadata;
 mod nyaa;
 pub use nyaa::NyaaProvider;
 mod json;
