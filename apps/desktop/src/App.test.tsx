@@ -449,3 +449,58 @@ it("preserves settings edits after a save error without claiming success", async
   );
   expect(screen.queryByRole("status")).toBeNull();
 });
+
+it("opens Discover results in the existing file-selection flow without starting a transfer", async () => {
+  const { service } = api();
+  const result = {
+    info_hash: "a".repeat(40),
+    name: "Authorized search fixture",
+    magnet: "magnet:?xt=urn:btih:" + "a".repeat(40),
+    size_bytes: 1024,
+    seeders: 2,
+    leechers: 0,
+    added_unix_ms: null,
+    providers: ["nyaa"],
+    has_unknown_health: false,
+    trackers_truncated: false,
+  };
+  const searchApi = {
+    start: vi
+      .fn()
+      .mockResolvedValue({
+        id: 1,
+        query: "fixture",
+        phase: "completed",
+        providers: [],
+        results: [result],
+        partial: false,
+        truncated: false,
+      }),
+    snapshot: vi.fn(),
+    cancel: vi.fn().mockResolvedValue(true),
+  };
+  render(<App api={service} searchApi={searchApi} />);
+  await userEvent.click(screen.getByRole("button", { name: "Discover" }));
+  await userEvent.type(
+    screen.getByRole("textbox", { name: "Search torrents" }),
+    "fixture",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Search" }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Choose files" }),
+  );
+  expect(
+    (screen.getByLabelText("Magnet link or infohash") as HTMLInputElement)
+      .value,
+  ).toBe(result.magnet);
+  expect(service.prepare).not.toHaveBeenCalled();
+  expect(service.add).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: "Load file list" }));
+  expect(service.prepare).toHaveBeenCalledWith({
+    kind: "magnet",
+    value: result.magnet,
+  });
+  expect(
+    await screen.findByRole("button", { name: "Start download" }),
+  ).toBeTruthy();
+});
