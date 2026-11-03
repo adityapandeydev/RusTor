@@ -465,17 +465,15 @@ it("opens Discover results in the existing file-selection flow without starting 
     trackers_truncated: false,
   };
   const searchApi = {
-    start: vi
-      .fn()
-      .mockResolvedValue({
-        id: 1,
-        query: "fixture",
-        phase: "completed",
-        providers: [],
-        results: [result],
-        partial: false,
-        truncated: false,
-      }),
+    start: vi.fn().mockResolvedValue({
+      id: 1,
+      query: "fixture",
+      phase: "completed",
+      providers: [],
+      results: [result],
+      partial: false,
+      truncated: false,
+    }),
     snapshot: vi.fn(),
     cancel: vi.fn().mockResolvedValue(true),
   };
@@ -503,4 +501,25 @@ it("opens Discover results in the existing file-selection flow without starting 
   expect(
     await screen.findByRole("button", { name: "Start download" }),
   ).toBeTruthy();
+});
+
+it("opens settings from Discover and allows closing, navigating and reopening", async () => {
+  const { service } = api();
+  render(<App api={service} />);
+  await userEvent.click(screen.getByRole("button", { name: "Discover" }));
+  const settings = await screen.findByRole("button", {
+    name: "Download settings",
+  });
+  await waitFor(() => expect(settings.hasAttribute("disabled")).toBe(false));
+  await userEvent.click(settings);
+  expect(screen.getByRole("form", { name: "Download settings" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: /All transfers/ }));
+  expect(screen.getByRole("form", { name: "Download settings" })).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Close download settings" }),
+  );
+  expect(screen.queryByRole("form", { name: "Download settings" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Discover" }));
+  await userEvent.click(settings);
+  expect(screen.getByRole("form", { name: "Download settings" })).toBeTruthy();
 });

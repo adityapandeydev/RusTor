@@ -416,6 +416,20 @@ export default function App({
             </button>
           </div>
         </header>
+        {settingsOpen && snapshot && (
+          <DownloadSettingsPanel
+            api={api}
+            settings={snapshot.settings}
+            onClose={closeSettings}
+            onSaved={(next) => {
+              accept(next);
+              closeSettings();
+              setNotice(
+                "Settings saved. Speed limits are active; new torrents will use the default folder.",
+              );
+            }}
+          />
+        )}
         <div className="page-body" hidden={view !== "discover"}>
           <Discover
             api={searchApi}
@@ -470,20 +484,6 @@ export default function App({
               <Check size={15} aria-hidden="true" />
               {notice}
             </p>
-          )}
-          {settingsOpen && snapshot && (
-            <DownloadSettingsPanel
-              api={api}
-              settings={snapshot.settings}
-              onClose={closeSettings}
-              onSaved={(next) => {
-                accept(next);
-                closeSettings();
-                setNotice(
-                  "Settings saved. Speed limits are active; new torrents will use the default folder.",
-                );
-              }}
-            />
           )}
           {open && (
             <form
