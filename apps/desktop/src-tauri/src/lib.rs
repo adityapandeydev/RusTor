@@ -1,3 +1,4 @@
+mod search;
 mod service;
 mod settings;
 
@@ -137,6 +138,29 @@ async fn remove_torrent(
     state.remove(&id).await
 }
 
+#[tauri::command]
+async fn start_search(
+    query: String,
+    category: Option<rustor_search::Category>,
+    state: tauri::State<'_, search::DesktopSearch>,
+) -> Result<rustor_search::SearchSnapshot, CommandError> {
+    Ok((*state.start(query, category).await?).clone())
+}
+#[tauri::command]
+async fn get_search_snapshot(
+    id: u64,
+    state: tauri::State<'_, search::DesktopSearch>,
+) -> Result<rustor_search::SearchSnapshot, CommandError> {
+    Ok((*state.snapshot(id).await?).clone())
+}
+#[tauri::command]
+async fn cancel_search(
+    id: u64,
+    state: tauri::State<'_, search::DesktopSearch>,
+) -> Result<bool, CommandError> {
+    Ok(state.cancel(id).await)
+}
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -151,7 +175,10 @@ pub fn run() {
             resume_torrent,
             remove_torrent,
             retry_torrent,
-            save_settings
+            save_settings,
+            start_search,
+            get_search_snapshot,
+            cancel_search
         ])
         .setup(|app| {
             let download_dir = app.path().download_dir()?.join("RusTor");
@@ -167,6 +194,7 @@ pub fn run() {
                 state_dir,
             )));
             app.manage(state.clone());
+            app.manage(search::DesktopSearch::new());
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 state.initialize().await;
@@ -188,6 +216,7 @@ pub fn run() {
             if !state.stopping.swap(true, Ordering::AcqRel) {
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
+                    app.state::<search::DesktopSearch>().shutdown().await;
                     state.shutdown().await;
                     app.exit(0);
                 });
