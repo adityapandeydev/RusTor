@@ -20,11 +20,22 @@ export interface CommandError {
   code: string;
   message: string;
 }
+export interface DownloadSettings {
+  default_destination: string;
+  download_limit_kib: number;
+  upload_limit_kib: number;
+}
+export interface SettingsUpdate {
+  destination_id: string | null;
+  download_limit_kib: number;
+  upload_limit_kib: number;
+}
 export interface Snapshot {
   revision: number;
   phase: "starting" | "ready" | "failed";
   torrents: Torrent[];
   default_destination: string;
+  settings: DownloadSettings;
   error: CommandError | null;
 }
 export interface Selection {
@@ -61,6 +72,7 @@ export interface DesktopApi {
   resume(id: string): Promise<void>;
   remove(id: string): Promise<void>;
   retry(id: string): Promise<void>;
+  saveSettings(update: SettingsUpdate): Promise<Snapshot>;
 }
 
 export const desktop: DesktopApi = {
@@ -84,6 +96,7 @@ export const desktop: DesktopApi = {
   resume: (id) => invoke("resume_torrent", { id }),
   remove: (id) => invoke("remove_torrent", { id }),
   retry: (id) => invoke("retry_torrent", { id }),
+  saveSettings: (request) => invoke("save_settings", { request }),
 };
 
 export function errorMessage(error: unknown): string {

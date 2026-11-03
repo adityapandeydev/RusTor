@@ -18,6 +18,7 @@ import {
   Radio,
   RotateCcw,
   Search,
+  Settings2,
   Sun,
   Moon,
   X,
@@ -33,6 +34,7 @@ import type {
 } from "./bridge";
 import { bytes, displayPath } from "./format";
 import { FileChoices } from "./FileChoices";
+import { DownloadSettingsPanel } from "./DownloadSettingsPanel";
 
 const labels: Record<TorrentState, string> = {
   checking: "Checking files",
@@ -66,6 +68,8 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
   const [notice, setNotice] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsButton = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [magnet, setMagnet] = useState("");
   const [file, setFile] = useState<Selection | null>(null);
@@ -131,6 +135,11 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
   function closeAdd() {
     setOpen(false);
     setPrepared(null);
+  }
+
+  function closeSettings() {
+    setSettingsOpen(false);
+    requestAnimationFrame(() => settingsButton.current?.focus());
   }
 
   const torrents = snapshot?.torrents ?? [];
@@ -355,6 +364,17 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
           </div>
           <div className="header-actions">
             <button
+              ref={settingsButton}
+              className="icon-button settings-toggle"
+              aria-label="Download settings"
+              title="Download settings"
+              aria-expanded={settingsOpen}
+              disabled={!ready || adding || choosing || settingsOpen}
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings2 size={18} aria-hidden="true" />
+            </button>
+            <button
               className="icon-button theme-toggle"
               aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
               title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
@@ -415,6 +435,20 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
             <Check size={15} aria-hidden="true" />
             {notice}
           </p>
+        )}
+        {settingsOpen && snapshot && (
+          <DownloadSettingsPanel
+            api={api}
+            settings={snapshot.settings}
+            onClose={closeSettings}
+            onSaved={(next) => {
+              accept(next);
+              closeSettings();
+              setNotice(
+                "Settings saved. Speed limits are active; new torrents will use the default folder.",
+              );
+            }}
+          />
         )}
         {open && (
           <form

@@ -22,6 +22,29 @@ use tokio::{
 
 use crate::{Error, TorrentId, TorrentInput};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct SpeedLimits {
+    pub download_bps: Option<NonZeroU32>,
+    pub upload_bps: Option<NonZeroU32>,
+}
+impl SpeedLimits {
+    // The native governor quota uses whole nanoseconds per byte. Larger rates
+    // round its interval to zero and cannot represent a finite limit.
+    pub const MAX_BPS: u32 = 1_000_000_000;
+    fn validate(self) -> Result<(), Error> {
+        if [self.download_bps, self.upload_bps]
+            .into_iter()
+            .flatten()
+            .any(|rate| !(16 * 1024..=Self::MAX_BPS).contains(&rate.get()))
+        {
+            return Err(Error::InvalidInput(
+                "speed limits must be unlimited or between 16 KiB/s and 1,000,000,000 bytes/s",
+            ));
+        }
+        Ok(())
+    }
+}
+
 pub struct EngineConfig {
     pub download_dir: PathBuf,
     pub state_dir: PathBuf,
@@ -75,6 +98,15 @@ pub struct PreparedTorrent {
     input: TorrentInput,
     #[serde(skip)]
     peers: Vec<SocketAddr>,
+    #[serde(skip)]
+    relative_output: PathBuf,
+}
+
+impl PreparedTorrent {
+    /// Preserve native subfolder placement when using a different default root.
+    pub fn destination_under(&self, root: &std::path::Path) -> PathBuf {
+        root.join(&self.relative_output)
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -116,6 +148,7 @@ pub struct Engine {
     metadata_timeout: Duration,
     discovery: bool,
     next_native_id: AtomicUsize,
+    download_dir: PathBuf,
 }
 
 struct ActiveSession {
@@ -174,6 +207,7 @@ impl Engine {
             client_name_and_version: Some(concat!("RusTor/", env!("CARGO_PKG_VERSION")).to_owned()),
             ..Default::default()
         };
+        let download_dir = config.download_dir.clone();
         let session = Session::new_with_opts(config.download_dir, options)
             .await
             .map_err(|e| backend("open torrent session", e))?;
@@ -194,6 +228,7 @@ impl Engine {
             metadata_timeout: config.metadata_timeout,
             discovery: config.discovery,
             next_native_id: AtomicUsize::new(next_native_id),
+            download_dir,
         })
     }
 
@@ -220,7 +255,7 @@ impl Engine {
         .await
         .map_err(|_| Error::MetadataTimeout)?
         .map_err(|e| backend("prepare torrent", e))?;
-        let (metadata, mut seen_peers) = match response {
+        let (metadata, mut seen_peers, relative_output) = match response {
             AddTorrentResponse::ListOnly(list) => {
                 let input = TorrentInput::from_bytes(list.torrent_bytes.to_vec())?;
                 let files = list
@@ -243,7 +278,14 @@ impl Engine {
                     ));
                 }
                 let name = list.info.name().map(|n| n.into_owned());
-                ((input, name, files), list.seen_peers)
+                (
+                    (input, name, files),
+                    list.seen_peers,
+                    list.output_folder
+                        .strip_prefix(&self.download_dir)
+                        .map_err(|e| backend("prepare destination", e))?
+                        .to_owned(),
+                )
             }
             AddTorrentResponse::AlreadyManaged(_, _) => {
                 return Err(Error::InvalidInput(
@@ -267,6 +309,7 @@ impl Engine {
             files,
             input,
             peers: seen_peers,
+            relative_output,
         })
     }
 
@@ -406,6 +449,27 @@ impl Engine {
         let guard = self.session.read().await;
         let handle = handle(&guard.as_ref().ok_or(Error::Stopped)?.native, id)?;
         snapshot(&handle)
+    }
+
+    pub async fn set_speed_limits(&self, limits: SpeedLimits) -> Result<(), Error> {
+        limits.validate()?;
+        let _control = self.controls.lock().await;
+        let guard = self.session.read().await;
+        let native = &guard.as_ref().ok_or(Error::Stopped)?.native;
+        native.ratelimits.set_download_bps(limits.download_bps);
+        native.ratelimits.set_upload_bps(limits.upload_bps);
+        Ok(())
+    }
+
+    pub async fn speed_limits(&self) -> Result<SpeedLimits, Error> {
+        let _control = self.controls.lock().await;
+        let guard = self.session.read().await;
+        let native = &guard.as_ref().ok_or(Error::Stopped)?.native;
+        let limits = native.ratelimits.get_config();
+        Ok(SpeedLimits {
+            download_bps: limits.download_bps,
+            upload_bps: limits.upload_bps,
+        })
     }
 
     pub async fn pause(&self, id: &TorrentId) -> Result<(), Error> {

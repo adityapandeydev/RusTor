@@ -962,3 +962,70 @@ progress::-moz-progress-bar {
     gap: 12px;
   }
 }
+
+.download-settings-panel {
+  margin-top: 22px;
+  padding: 22px;
+  background: var(--surface);
+  border-radius: 12px;
+}
+.settings-intro,
+.settings-help {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 0;
+}
+.settings-help {
+  margin-top: 12px;
+  color: var(--faint);
+}
+.settings-rate-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.settings-rate-fields label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.settings-rate-fields input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius);
+  background: var(--ground);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.settings-toggle {
+  width: 36px;
+  height: 36px;
+}
+.page-header > div:first-child {
+  min-width: 0;
+}
+@media (max-width: 680px) {
+  .download-settings-panel {
+    padding: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .settings-rate-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
