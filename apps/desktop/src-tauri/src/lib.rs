@@ -1,6 +1,8 @@
 mod service;
 
-use service::{AddRequest, AppSnapshot, CommandError, DesktopState, Selection};
+use service::{
+    AddSource, AppSnapshot, CommandError, DesktopState, PreparedSelection, Selection, StartRequest,
+};
 use std::{
     sync::{Arc, atomic::Ordering},
     time::Duration,
@@ -69,11 +71,28 @@ async fn pick_destination(
 }
 
 #[tauri::command]
-async fn add_torrent(
-    request: AddRequest,
+async fn prepare_torrent(
+    source: AddSource,
+    state: tauri::State<'_, Arc<DesktopState>>,
+) -> Result<PreparedSelection, CommandError> {
+    state.prepare(source).await
+}
+
+#[tauri::command]
+async fn discard_prepared(
+    id: String,
+    state: tauri::State<'_, Arc<DesktopState>>,
+) -> Result<(), CommandError> {
+    state.discard_prepared(&id).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_prepared(
+    request: StartRequest,
     state: tauri::State<'_, Arc<DesktopState>>,
 ) -> Result<rustor_torrent::AddOutcome, CommandError> {
-    state.add(request).await
+    state.start(request).await
 }
 
 #[tauri::command]
@@ -107,7 +126,9 @@ pub fn run() {
             get_snapshot,
             pick_torrent,
             pick_destination,
-            add_torrent,
+            prepare_torrent,
+            discard_prepared,
+            start_prepared,
             pause_torrent,
             resume_torrent,
             remove_torrent

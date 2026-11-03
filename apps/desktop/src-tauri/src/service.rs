@@ -1,10 +1,15 @@
 use std::{
     collections::VecDeque,
+    net::SocketAddr,
     path::PathBuf,
+    sync::Arc,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
-use rustor_torrent::{AddOptions, Engine, EngineConfig, TorrentId, TorrentInput, TorrentSnapshot};
+use rustor_torrent::{
+    AddOptions, Engine, EngineConfig, PreparedTorrent, TorrentFile, TorrentId, TorrentInput,
+    TorrentSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::AsyncReadExt,
@@ -84,9 +89,17 @@ pub enum AddSource {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct AddRequest {
-    pub source: AddSource,
+pub struct StartRequest {
+    pub prepared_id: String,
+    pub files: Vec<usize>,
     pub destination_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct PreparedSelection {
+    pub id: String,
+    pub name: Option<String>,
+    pub files: Vec<TorrentFile>,
 }
 
 #[derive(Default)]
@@ -94,6 +107,7 @@ struct Selections {
     next: u64,
     files: VecDeque<(String, PathBuf)>,
     folders: VecDeque<(String, PathBuf)>,
+    prepared: VecDeque<(String, Arc<PreparedTorrent>)>,
 }
 
 impl Selections {
@@ -118,6 +132,35 @@ impl Selections {
             entries.pop_front();
         }
         Selection { id, label }
+    }
+
+    fn insert_prepared(&mut self, torrent: PreparedTorrent) -> PreparedSelection {
+        self.next += 1;
+        let id = self.next.to_string();
+        let response = PreparedSelection {
+            id: id.clone(),
+            name: torrent.name.clone(),
+            files: torrent.files.clone(),
+        };
+        self.prepared.push_back((id, Arc::new(torrent)));
+        // At most four validated metainfo blobs (each <=16 MiB) are retained.
+        while self.prepared.len() > 4 {
+            self.prepared.pop_front();
+        }
+        response
+    }
+
+    fn find_prepared(&self, id: &str) -> Result<Arc<PreparedTorrent>, CommandError> {
+        self.prepared
+            .iter()
+            .find(|(key, _)| key == id)
+            .map(|(_, torrent)| torrent.clone())
+            .ok_or_else(|| {
+                CommandError::new(
+                    "selection_expired",
+                    "This file list has expired. Load the files again.",
+                )
+            })
     }
 
     fn find(&self, id: &str, folder: bool) -> Result<PathBuf, CommandError> {
@@ -218,25 +261,60 @@ impl DesktopState {
         Ok(self.selections.lock().await.insert(path, folder))
     }
 
-    pub async fn add(
-        &self,
-        request: AddRequest,
-    ) -> Result<rustor_torrent::AddOutcome, CommandError> {
-        self.add_with_options(request, AddOptions::default()).await
+    pub async fn prepare(&self, source: AddSource) -> Result<PreparedSelection, CommandError> {
+        self.prepare_with_peers(source, Vec::new()).await
     }
 
-    async fn add_with_options(
+    async fn prepare_with_peers(
         &self,
-        request: AddRequest,
-        mut options: AddOptions,
+        source: AddSource,
+        peers: Vec<SocketAddr>,
+    ) -> Result<PreparedSelection, CommandError> {
+        let engine = self.engine()?;
+        let input = self.read_input(source).await?;
+        let torrent = engine.prepare(input, peers).await?;
+        Ok(self.selections.lock().await.insert_prepared(torrent))
+    }
+
+    pub async fn discard_prepared(&self, id: &str) {
+        self.selections
+            .lock()
+            .await
+            .prepared
+            .retain(|(key, _)| key != id);
+    }
+
+    pub async fn start(
+        &self,
+        request: StartRequest,
     ) -> Result<rustor_torrent::AddOutcome, CommandError> {
         let engine = self.engine()?;
-        let destination = request.destination_id.as_ref().map(|id| id.to_owned());
-        let destination = match destination {
-            Some(id) => Some(self.selections.lock().await.find(&id, true)?),
-            None => None,
+        let (prepared, destination) = {
+            let selections = self.selections.lock().await;
+            let prepared = selections.find_prepared(&request.prepared_id)?;
+            let destination = request
+                .destination_id
+                .as_ref()
+                .map(|id| selections.find(id, true))
+                .transpose()?;
+            (prepared, destination)
         };
-        let input = match request.source {
+        let result = engine
+            .add_prepared(
+                &prepared,
+                request.files,
+                AddOptions {
+                    destination,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        self.discard_prepared(&request.prepared_id).await;
+        Ok(result)
+    }
+
+    async fn read_input(&self, source: AddSource) -> Result<TorrentInput, CommandError> {
+        let input = match source {
             AddSource::Magnet { value } => TorrentInput::parse(&value)?,
             AddSource::File { id } => {
                 let path = self.selections.lock().await.find(&id, false)?;
@@ -263,8 +341,7 @@ impl DesktopState {
                     })??
             }
         };
-        options.destination = destination;
-        engine.add(input, options).await.map_err(Into::into)
+        Ok(input)
     }
 
     pub async fn pause(&self, id: &str) -> Result<(), CommandError> {
@@ -330,10 +407,7 @@ mod tests {
     #[test]
     fn file_command_cannot_name_an_arbitrary_local_path() {
         assert!(
-            serde_json::from_str::<AddRequest>(
-                r#"{"source":{"kind":"file","path":"C:/secret"},"destination_id":null}"#
-            )
-            .is_err()
+            serde_json::from_str::<AddSource>(r#"{"kind":"file","path":"C:/secret"}"#).is_err()
         );
     }
 
@@ -397,17 +471,68 @@ mod tests {
         state.initialize().await;
         let file = state.select(path, false).await.unwrap();
         let folder = state.select(destination.clone(), true).await.unwrap();
-        let added = state
-            .add_with_options(
-                AddRequest {
-                    source: AddSource::File { id: file.id },
-                    destination_id: Some(folder.id),
+        assert!(
+            state
+                .start(StartRequest {
+                    prepared_id: "unknown".into(),
+                    files: vec![0],
+                    destination_id: None
+                })
+                .await
+                .is_err()
+        );
+        let prepared = state
+            .prepare_with_peers(
+                AddSource::File {
+                    id: file.id.clone(),
                 },
-                AddOptions {
-                    initial_peers: vec![seeder.listen_addr().unwrap()],
-                    ..Default::default()
-                },
+                vec![seeder.listen_addr().unwrap()],
             )
+            .await
+            .unwrap();
+        // Bound retained previews and reject stale handles without starting anything.
+        let first_id = prepared.id.clone();
+        let mut prepared = prepared;
+        for _ in 0..4 {
+            prepared = state
+                .prepare_with_peers(
+                    AddSource::File {
+                        id: file.id.clone(),
+                    },
+                    vec![seeder.listen_addr().unwrap()],
+                )
+                .await
+                .unwrap();
+        }
+        assert!(
+            state
+                .start(StartRequest {
+                    prepared_id: first_id,
+                    files: vec![0],
+                    destination_id: None
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(state.selections.lock().await.prepared.len(), 4);
+        assert!(state.snapshot().await.torrents.is_empty());
+        assert!(!destination.join("authorized.bin").exists());
+        assert!(
+            state
+                .start(StartRequest {
+                    prepared_id: prepared.id.clone(),
+                    files: vec![],
+                    destination_id: Some(folder.id.clone())
+                })
+                .await
+                .is_err()
+        );
+        let added = state
+            .start(StartRequest {
+                prepared_id: prepared.id,
+                files: vec![0],
+                destination_id: Some(folder.id),
+            })
             .await
             .unwrap();
         tokio::time::timeout(Duration::from_secs(10), async {

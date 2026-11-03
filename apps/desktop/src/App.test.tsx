@@ -27,6 +27,15 @@ function api(snapshot = initial) {
     }),
     pickTorrent: vi.fn().mockResolvedValue(null),
     pickDestination: vi.fn().mockResolvedValue(null),
+    prepare: vi.fn().mockResolvedValue({
+      id: "prepared-1",
+      name: "Authorized collection",
+      files: [
+        { index: 0, path: "wanted.bin", length: 1024, selected: true },
+        { index: 1, path: "extra.bin", length: 2048, selected: true },
+      ],
+    }),
+    discardPrepared: vi.fn().mockResolvedValue(undefined),
     add: vi
       .fn()
       .mockResolvedValue({ id: "torrent-id", already_managed: false }),
@@ -69,13 +78,20 @@ describe("Downloads desktop flow", () => {
       screen.getByRole("button", { name: "Choose folder" }),
     );
     await userEvent.click(
+      screen.getByRole("button", { name: "Load file list" }),
+    );
+    await screen.findByRole("checkbox", { name: "extra.bin" });
+    expect(service.prepare).toHaveBeenCalledWith({
+      kind: "magnet",
+      value: "magnet:?xt=urn:btih:test",
+    });
+    expect(service.add).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "extra.bin" }));
+    await userEvent.click(
       screen.getByRole("button", { name: "Start download" }),
     );
     await waitFor(() =>
-      expect(service.add).toHaveBeenCalledWith(
-        { kind: "magnet", value: "magnet:?xt=urn:btih:test" },
-        "folder-1",
-      ),
+      expect(service.add).toHaveBeenCalledWith("prepared-1", [0], "folder-1"),
     );
   });
 
@@ -97,16 +113,20 @@ describe("Downloads desktop flow", () => {
       screen.getByRole("button", { name: "Choose .torrent file" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Start download" }),
+      screen.getByRole("button", { name: "Load file list" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Start download" }),
     );
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
       "Invalid torrent metadata.",
     );
-    expect(service.add).toHaveBeenCalledWith(
-      { kind: "file", id: "file-1" },
-      null,
-    );
+    expect(service.prepare).toHaveBeenCalledWith({
+      kind: "file",
+      id: "file-1",
+    });
+    expect(service.add).toHaveBeenCalledWith("prepared-1", [0, 1], null);
     expect(screen.getByText("authorized.torrent")).toBeDefined();
   });
 
@@ -194,4 +214,90 @@ it("restores a saved light theme across remounts", async () => {
     screen.getByRole("button", { name: "Switch to dark mode" }),
   );
   expect(localStorage.getItem("rustor-theme")).toBe("dark");
+});
+
+it("requires a selected file and discards a preview when the source changes", async () => {
+  const { service } = api();
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Add torrent" }),
+  );
+  await userEvent.type(
+    screen.getByLabelText("Magnet link or infohash"),
+    "magnet:?xt=urn:btih:test",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Load file list" }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Clear selection" }),
+  );
+  expect(screen.getByRole("button", { name: "Start download" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(service.add).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Select all files" }),
+  );
+  expect(screen.getByRole("button", { name: "Start download" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+  await userEvent.type(screen.getByLabelText("Magnet link or infohash"), "x");
+  await waitFor(() =>
+    expect(service.discardPrepared).toHaveBeenCalledWith("prepared-1"),
+  );
+  expect(screen.queryByRole("checkbox")).toBeNull();
+});
+
+it("shows metadata failures without starting a torrent", async () => {
+  const { service } = api();
+  vi.mocked(service.prepare).mockRejectedValue({
+    message: "Metadata could not be found. Try again.",
+  });
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Add torrent" }),
+  );
+  await userEvent.type(
+    screen.getByLabelText("Magnet link or infohash"),
+    "magnet:?xt=urn:btih:test",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Load file list" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "Metadata could not be found",
+  );
+  expect(service.add).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Magnet link or infohash")).toHaveProperty(
+    "value",
+    "magnet:?xt=urn:btih:test",
+  );
+});
+
+it("allows an expired file list to be reloaded without re-entering the source", async () => {
+  const { service } = api();
+  vi.mocked(service.add).mockRejectedValue({
+    code: "selection_expired",
+    message: "This file list has expired. Load the files again.",
+  });
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Add torrent" }),
+  );
+  await userEvent.type(
+    screen.getByLabelText("Magnet link or infohash"),
+    "magnet:?xt=urn:btih:test",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Load file list" }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Start download" }),
+  );
+  await screen.findByRole("alert");
+  expect(screen.getByRole("button", { name: "Load file list" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+  expect(screen.getByLabelText("Magnet link or infohash")).toHaveProperty(
+    "value",
+    "magnet:?xt=urn:btih:test",
+  );
 });

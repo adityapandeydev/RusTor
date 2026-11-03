@@ -33,14 +33,28 @@ export interface Selection {
 }
 export type AddSource =
   { kind: "magnet"; value: string } | { kind: "file"; id: string };
+export interface TorrentFile {
+  index: number;
+  path: string;
+  length: number;
+  selected: boolean;
+}
+export interface PreparedSelection {
+  id: string;
+  name: string | null;
+  files: TorrentFile[];
+}
 export interface DesktopApi {
   available: boolean;
   snapshot(): Promise<Snapshot>;
   subscribe(callback: (snapshot: Snapshot) => void): Promise<() => void>;
   pickTorrent(): Promise<Selection | null>;
   pickDestination(): Promise<Selection | null>;
+  prepare(source: AddSource): Promise<PreparedSelection>;
+  discardPrepared(id: string): Promise<void>;
   add(
-    source: AddSource,
+    preparedId: string,
+    files: number[],
     destinationId: string | null,
   ): Promise<{ id: string; already_managed: boolean }>;
   pause(id: string): Promise<void>;
@@ -55,9 +69,15 @@ export const desktop: DesktopApi = {
     listen<Snapshot>("torrent-snapshot", (event) => callback(event.payload)),
   pickTorrent: () => invoke("pick_torrent"),
   pickDestination: () => invoke("pick_destination"),
-  add: (source, destinationId) =>
-    invoke("add_torrent", {
-      request: { source, destination_id: destinationId },
+  prepare: (source) => invoke("prepare_torrent", { source }),
+  discardPrepared: (id) => invoke("discard_prepared", { id }),
+  add: (preparedId, files, destinationId) =>
+    invoke("start_prepared", {
+      request: {
+        prepared_id: preparedId,
+        files,
+        destination_id: destinationId,
+      },
     }),
   pause: (id) => invoke("pause_torrent", { id }),
   resume: (id) => invoke("resume_torrent", { id }),
