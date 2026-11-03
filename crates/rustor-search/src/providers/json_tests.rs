@@ -284,12 +284,12 @@ fn strips_only_websocket_trackers_without_rewriting_other_magnet_parameters() {
 #[test]
 fn registry_exposes_connected_categories_without_network_calls() {
     let providers = super::super::desktop_providers().unwrap();
-    assert_eq!(providers.len(), 4);
+    assert_eq!(providers.len(), 10);
     for (category, count) in [
         (Category::Anime, 2),
-        (Category::Movies, 2),
-        (Category::Tv, 1),
-        (Category::Games, 0),
+        (Category::Movies, 4),
+        (Category::Tv, 4),
+        (Category::Games, 1),
     ] {
         assert_eq!(
             providers

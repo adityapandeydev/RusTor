@@ -19,7 +19,16 @@ pub struct DesktopSearch {
 impl DesktopSearch {
     pub fn new() -> Self {
         let service = desktop_providers()
-            .and_then(|providers| SearchService::new(providers, SearchConfig::default()))
+            .and_then(|providers| {
+                SearchService::new(
+                    providers,
+                    SearchConfig {
+                        provider_timeout: std::time::Duration::from_secs(45),
+                        overall_timeout: std::time::Duration::from_secs(90),
+                        ..SearchConfig::default()
+                    },
+                )
+            })
             .map_err(|_| {
                 CommandError::new(
                     "search_unavailable",

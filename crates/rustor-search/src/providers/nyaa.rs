@@ -125,7 +125,7 @@ fn field(node: roxmltree::Node<'_, '_>, namespace: Option<&str>, name: &str) -> 
 fn count(value: &str) -> Option<u32> {
     value.trim().parse().ok()
 }
-fn parse_size(value: &str) -> Option<u64> {
+pub(super) fn parse_size(value: &str) -> Option<u64> {
     if value.len() > 64 {
         return None;
     }
