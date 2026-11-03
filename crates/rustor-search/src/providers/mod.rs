@@ -14,3 +14,13 @@ pub fn desktop_providers() -> Result<Vec<std::sync::Arc<dyn crate::Provider>>, c
         std::sync::Arc::new(JsonProvider::subsplease()?),
     ])
 }
+
+mod html;
+mod fitgirl;
+mod tpb;
+mod x1337;
+pub use fitgirl::FitGirlProvider;
+pub use tpb::TpbProvider;
+pub use x1337::X1337Provider;
+#[cfg(test)]
+mod test_support;

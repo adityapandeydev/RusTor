@@ -8,6 +8,7 @@ const REQUEST_INTERVAL: Duration = Duration::from_secs(2);
 #[derive(Clone, Copy)]
 pub(super) enum Media {
     Xml,
+    Html,
     Json,
     SubsPleaseJson,
 }
@@ -15,6 +16,7 @@ impl Media {
     fn accept(self) -> &'static str {
         match self {
             Self::Xml => "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8",
+            Self::Html => "text/html",
             _ => "application/json",
         }
     }
@@ -24,6 +26,7 @@ impl Media {
                 value,
                 "application/rss+xml" | "application/xml" | "text/xml"
             ),
+            Self::Html => matches!(value, "text/html" | "application/xhtml+xml"),
             Self::Json => value == "application/json",
             // This fixed-origin API currently labels valid JSON text/html; decoding must still succeed.
             Self::SubsPleaseJson => matches!(value, "application/json" | "text/html"),
@@ -33,6 +36,7 @@ impl Media {
 pub(super) struct Http {
     pub(super) client: Client,
     pub(super) gate: Mutex<Gate>,
+    interval: Duration,
 }
 pub(super) struct Gate {
     next: Instant,
@@ -47,11 +51,19 @@ impl Http {
     pub(super) fn new() -> Result<Self, SearchError> {
         Ok(Self {
             client: client(true)?,
+            interval: REQUEST_INTERVAL,
             gate: Mutex::new(Gate {
                 next: Instant::now(),
                 cooldown: None,
             }),
         })
+    }
+    #[cfg(test)]
+    pub(super) fn local() -> Self {
+        let mut http = Self::new().unwrap();
+        http.client = client(false).unwrap();
+        http.interval = Duration::ZERO;
+        http
     }
     pub(super) async fn reserve(&self) -> Result<(), ProviderFailure> {
         loop {
@@ -77,7 +89,7 @@ impl Http {
             gate.cooldown = None;
             let next = gate.next;
             if next <= Instant::now() {
-                gate.next = Instant::now() + REQUEST_INTERVAL;
+                gate.next = Instant::now() + self.interval;
                 return Ok(());
             }
             // Release the lock so an in-flight response can publish a cooldown.

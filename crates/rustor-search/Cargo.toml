@@ -17,6 +17,7 @@ url.workspace = true
 data-encoding = "2"
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
 roxmltree = "=0.21.2"
+scraper = { version = "=0.29.0", default-features = false }
 chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
 
 [dev-dependencies]
