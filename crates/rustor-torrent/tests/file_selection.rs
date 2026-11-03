@@ -70,6 +70,10 @@ async fn previews_without_payload_then_downloads_only_selected_files_and_restore
         TorrentInput::parse(&format!("magnet:?xt=urn:btih:{}", input.id().as_str())).unwrap();
     let prepared = engine.prepare(magnet, vec![peer]).await.unwrap();
     assert_eq!(prepared.files.len(), 2);
+    assert_eq!(
+        prepared.destination_under(&root.path().join("new-root")),
+        root.path().join("new-root/collection")
+    );
     assert!(engine.list().await.unwrap().is_empty());
     assert!(!root.path().join("downloads/collection").exists());
     let wanted_id = prepared

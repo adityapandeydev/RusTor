@@ -303,3 +303,80 @@ async fn removes_an_incomplete_download_without_deleting_its_partial_file() {
     restored.shutdown().await.unwrap();
     fixture.session.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn session_speed_limits_can_change_during_a_real_transfer() {
+    let fixture = Fixture::new().await;
+    let root = TempDir::new().unwrap();
+    let engine = Engine::open(config(root.path())).await.unwrap();
+    engine
+        .set_speed_limits(rustor_torrent::SpeedLimits {
+            download_bps: NonZeroU32::new(32 * 1024),
+            upload_bps: NonZeroU32::new(64 * 1024),
+        })
+        .await
+        .unwrap();
+    let added = engine
+        .add(
+            TorrentInput::from_bytes(fixture.bytes.clone()).unwrap(),
+            AddOptions {
+                initial_peers: vec![fixture.peer],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    sleep(Duration::from_millis(1200)).await;
+    let limited = engine.snapshot(&added.id).await.unwrap();
+    assert!(limited.downloaded_bytes > 0);
+    assert!(
+        limited.downloaded_bytes < limited.total_bytes,
+        "rate limit did not constrain the transfer"
+    );
+    assert_eq!(
+        engine.speed_limits().await.unwrap().upload_bps,
+        NonZeroU32::new(64 * 1024)
+    );
+    engine
+        .set_speed_limits(rustor_torrent::SpeedLimits::default())
+        .await
+        .unwrap();
+    wait_for(&engine, &added.id, TorrentState::Seeding).await;
+    assert_eq!(
+        tokio::fs::read(root.path().join("downloads/fixture.bin"))
+            .await
+            .unwrap(),
+        fixture.payload
+    );
+    assert!(
+        engine
+            .set_speed_limits(rustor_torrent::SpeedLimits {
+                download_bps: NonZeroU32::new(1024),
+                upload_bps: None
+            })
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        engine.speed_limits().await.unwrap(),
+        rustor_torrent::SpeedLimits::default()
+    );
+    engine
+        .set_speed_limits(rustor_torrent::SpeedLimits {
+            download_bps: NonZeroU32::new(rustor_torrent::SpeedLimits::MAX_BPS),
+            upload_bps: None,
+        })
+        .await
+        .unwrap();
+    assert!(
+        engine
+            .set_speed_limits(rustor_torrent::SpeedLimits {
+                download_bps: NonZeroU32::new(u32::MAX),
+                upload_bps: None
+            })
+            .await
+            .is_err()
+    );
+    engine.shutdown().await.unwrap();
+    fixture.session.stop().await;
+}
