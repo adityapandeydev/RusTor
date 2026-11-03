@@ -3846,6 +3846,7 @@ name = "rustor-desktop"
 version = "0.1.0"
 dependencies = [
  "librqbit",
+ "rustor-search",
  "rustor-torrent",
  "serde",
  "serde_json",
