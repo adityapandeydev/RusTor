@@ -803,3 +803,105 @@ progress::-moz-progress-bar {
     gap: 4px;
   }
 }
+
+/* File review uses the existing form, keeping its actions in normal flow. */
+.file-choices {
+  padding-bottom: 20px;
+}
+.file-choices-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.file-choices h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+.file-choices-heading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.file-choice-actions {
+  display: flex;
+  gap: 16px;
+}
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--data);
+  font-size: 11px;
+  min-height: 32px;
+  padding: 4px 0;
+}
+.text-button:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.file-choice-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border-block: 1px solid var(--line);
+}
+.file-choice {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+.file-choice + .file-choice {
+  border-top: 1px solid var(--line);
+}
+.file-choice input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--data);
+}
+.file-choice .file-choice-path {
+  color: var(--text);
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.file-choice-size {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.file-choice-note,
+.file-choice-empty {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--faint);
+  margin: 10px 0 0;
+}
+.file-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.file-search {
+  width: 100%;
+  background: var(--ground);
+  color: var(--text);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius);
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}

@@ -24,12 +24,14 @@ import {
 import { desktop, errorMessage } from "./bridge";
 import type {
   DesktopApi,
+  PreparedSelection,
   Selection,
   Snapshot,
   Torrent,
   TorrentState,
 } from "./bridge";
 import { bytes, displayPath } from "./format";
+import { FileChoices } from "./FileChoices";
 
 const labels: Record<TorrentState, string> = {
   checking: "Checking files",
@@ -67,6 +69,8 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
   const [magnet, setMagnet] = useState("");
   const [file, setFile] = useState<Selection | null>(null);
   const [destination, setDestination] = useState<Selection | null>(null);
+  const [prepared, setPrepared] = useState<PreparedSelection | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState<Set<string>>(new Set());
@@ -113,6 +117,21 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
     if (open) magnetInput.current?.focus();
   }, [open]);
 
+  useEffect(
+    () => () => {
+      if (prepared)
+        void api.discardPrepared(prepared.id).catch(() => {
+          /* Cache is bounded if cleanup fails. */
+        });
+    },
+    [api, prepared],
+  );
+
+  function closeAdd() {
+    setOpen(false);
+    setPrepared(null);
+  }
+
   const torrents = snapshot?.torrents ?? [];
   const ready = api.available && snapshot?.phase === "ready";
   const activeCount = torrents.filter(
@@ -147,6 +166,7 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
         : api.pickDestination());
       if (mounted.current && selection) {
         if (kind === "file") {
+          setPrepared(null);
           setFile(selection);
           setMagnet("");
         } else setDestination(selection);
@@ -165,10 +185,30 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
     setError(null);
     setNotice("");
     try {
+      if (!prepared) {
+        const preview = await api.prepare(
+          file
+            ? { kind: "file", id: file.id }
+            : { kind: "magnet", value: magnet.trim() },
+        );
+        if (!mounted.current) {
+          void api.discardPrepared(preview.id).catch(() => {});
+          return;
+        }
+        setPrepared(preview);
+        setSelectedFiles(
+          new Set(
+            preview.files
+              .filter((file) => file.selected)
+              .map((file) => file.index),
+          ),
+        );
+        return;
+      }
+      if (selectedFiles.size === 0) return;
       const outcome = await api.add(
-        file
-          ? { kind: "file", id: file.id }
-          : { kind: "magnet", value: magnet.trim() },
+        prepared.id,
+        [...selectedFiles].sort((a, b) => a - b),
         destination?.id ?? null,
       );
       if (!mounted.current) return;
@@ -177,14 +217,23 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
           ? "This torrent is already in your session."
           : "Torrent added. Your files are being checked.",
       );
-      setOpen(false);
+      closeAdd();
       setFile(null);
       setMagnet("");
       setFilter("all");
       setQuery("");
       accept(await api.snapshot());
     } catch (reason) {
-      if (mounted.current) setError(errorMessage(reason));
+      if (mounted.current) {
+        setError(errorMessage(reason));
+        if (
+          typeof reason === "object" &&
+          reason !== null &&
+          "code" in reason &&
+          reason.code === "selection_expired"
+        )
+          setPrepared(null);
+      }
     } finally {
       if (mounted.current) setAdding(false);
     }
@@ -318,7 +367,8 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
               className="button primary"
               disabled={!ready || adding || choosing}
               onClick={() => {
-                setOpen(!open);
+                if (open) closeAdd();
+                else setOpen(true);
                 setError(null);
               }}
             >
@@ -368,7 +418,7 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
             className="add-panel"
             onSubmit={add}
             onKeyDown={(event) => {
-              if (event.key === "Escape" && !adding) setOpen(false);
+              if (event.key === "Escape" && !adding) closeAdd();
             }}
             aria-label="Add a torrent"
           >
@@ -379,7 +429,7 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
                 className="icon-button"
                 aria-label="Close add torrent"
                 disabled={adding}
-                onClick={() => setOpen(false)}
+                onClick={closeAdd}
               >
                 <X size={17} />
               </button>
@@ -392,6 +442,7 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
                 id="magnet"
                 value={magnet}
                 onChange={(event) => {
+                  setPrepared(null);
                   setMagnet(event.target.value);
                   if (event.target.value) setFile(null);
                 }}
@@ -419,7 +470,10 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
                     type="button"
                     className="icon-button small"
                     aria-label="Clear torrent file"
-                    onClick={() => setFile(null)}
+                    onClick={() => {
+                      setFile(null);
+                      setPrepared(null);
+                    }}
                     disabled={adding}
                   >
                     <X size={14} />
@@ -450,18 +504,42 @@ export default function App({ api = desktop }: { api?: DesktopApi }) {
                 Choose folder
               </button>
             </div>
+            {prepared && (
+              <FileChoices
+                key={prepared.id}
+                files={prepared.files}
+                selected={selectedFiles}
+                onChange={setSelectedFiles}
+                disabled={adding}
+              />
+            )}
             <div className="form-footer">
-              <p>Downloading and seeding share your IP address with peers.</p>
+              <p>
+                {prepared
+                  ? "Downloading and seeding share your IP address with peers."
+                  : "Load the file list before downloading. Magnet metadata may require contacting peers."}
+              </p>
               <button
                 className="button primary"
-                disabled={adding || choosing || (!file && !magnet.trim())}
+                disabled={
+                  adding ||
+                  choosing ||
+                  (!file && !magnet.trim()) ||
+                  (prepared !== null && selectedFiles.size === 0)
+                }
               >
                 {adding ? (
                   <LoaderCircle className="spin" size={16} aria-hidden="true" />
                 ) : (
                   <ArrowDown size={16} aria-hidden="true" />
                 )}
-                {adding ? "Finding metadata…" : "Start download"}
+                {adding
+                  ? prepared
+                    ? "Starting download…"
+                    : "Loading files…"
+                  : prepared
+                    ? "Start download"
+                    : "Load file list"}
               </button>
             </div>
           </form>

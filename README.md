@@ -8,7 +8,7 @@ Frontend: React, TypeScript, Bun, Vite, and Tailwind CSS v4. The backend will po
 
 ## Engine foundation
 
-The `rustor-torrent` crate integrates librqbit 9.1.0 in-process, without a Node.js or Bun runtime. It supports validated magnets, hex/base32 v1 hashes, and `.torrent` metadata bytes; destination selection; concurrent transfers; progress snapshots; pause/resume and removal with files kept; and engine-owned session restoration. Initialization and per-torrent peer limits are configurable. A session-directory lock prevents concurrent processes from writing the same engine state.
+The `rustor-torrent` crate integrates librqbit 9.1.0 in-process, without a Node.js or Bun runtime. It supports validated magnets, hex/base32 v1 hashes, and `.torrent` metadata bytes; destination selection; concurrent transfers; metadata-only file previews and selective downloads; progress snapshots; pause/resume and removal with files kept; and engine-owned session restoration. Initialization and per-torrent peer limits are configurable. A session-directory lock prevents concurrent processes from writing the same engine state.
 
 The adapter reserves numeric session IDs atomically so simultaneous additions remain distinct with JSON persistence. This behavior is guarded by a real two-torrent transfer test.
 
@@ -24,7 +24,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 ## Desktop development
 
-The Downloads screen connects to the real Rust session through Tauri commands and live snapshots. It includes magnet/infohash entry, native `.torrent` and destination pickers, transfer filters, progress and speed reporting, details, and pause/resume and stop/remove controls. The × action stops downloading or seeding and removes the torrent from the saved session while keeping complete and partial files on disk. Dark mode uses navy surfaces with peach accents; a matching warm light mode is available from the header toggle, and the appearance preference is saved locally. File reads stay in Rust and use handles returned by the native picker; the frontend cannot submit an arbitrary file path. There is no end-user CLI or TUI.
+The Downloads screen connects to the real Rust session through Tauri commands and live snapshots. It includes magnet/infohash entry, native `.torrent` and destination pickers, transfer filters, progress and speed reporting, details, and pause/resume and stop/remove controls. The × action stops downloading or seeding and removes the torrent from the saved session while keeping complete and partial files on disk. Dark mode uses navy surfaces with peach accents; a matching warm light mode is available from the header toggle, and the appearance preference is saved locally. The add flow loads metadata first, then lets you choose files and review their total size before starting. Large lists support search and pagination. Selections survive session restoration; skipped files can still receive data from shared torrent pieces. New previews currently support up to 10,000 files. File reads stay in Rust and use handles returned by the native picker; the frontend cannot submit an arbitrary file path. There is no end-user CLI or TUI.
 
 Install Bun 1.3.5, a current Node.js development runtime compatible with Vite, Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). Windows needs the Microsoft C++ build tools and WebView2. Node.js and Bun are development tools and are not bundled as application runtimes.
 
@@ -46,7 +46,7 @@ The desktop build embeds the frontend and produces an executable without an inst
 
 Validation so far includes the native window rendering with an engine-ready response, frontend behavior tests, and a desktop-service integration test that selects handles, downloads generated data from a loopback peer, verifies bytes, and pauses/resumes/removes. Native file selection, resizing, and session persistence have also been checked manually on Windows. A complete native picker-to-download UI automation pass and macOS/Linux validation remain outstanding. GitHub Actions runs the Windows checks and debug executable build.
 
-Searchable-content coverage will be added through provider integrations; the torrent library does not supply a catalog. Drag-and-drop, notifications, payload deletion, retry controls, file selection, and download queue policies are follow-up work.
+Searchable-content coverage will be added through provider integrations; the torrent library does not supply a catalog. Drag-and-drop, notifications, payload deletion, retry controls, changing file selection after addition, and download queue policies are follow-up work.
 
 ## Acknowledgements
 
