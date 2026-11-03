@@ -9,6 +9,7 @@ description = "Provider-independent torrent search orchestration for RusTor"
 
 [dependencies]
 serde.workspace = true
+serde_json = "1"
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }

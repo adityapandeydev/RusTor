@@ -134,7 +134,7 @@ async fn read_request(socket: &mut TcpStream) -> String {
 async fn fixture_server(response: String) -> (NyaaProvider, tokio::task::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut provider = NyaaProvider::new().unwrap();
-    provider.client = client(false).unwrap();
+    provider.http.client = client(false).unwrap();
     provider.endpoint =
         url::Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
     let task = tokio::spawn(async move {
@@ -277,14 +277,14 @@ async fn honors_retry_after_without_sending_another_request() {
             } => assert!((59..=60).contains(&s)),
             other => assert_eq!(other, expected),
         }
-        assert!(provider.gate.lock().await.cooldown.is_some());
+        assert!(provider.http.gate.lock().await.cooldown.is_some());
     }
 }
 #[tokio::test]
 async fn cancellation_drops_a_pending_http_body() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut provider = NyaaProvider::new().unwrap();
-    provider.client = client(false).unwrap();
+    provider.http.client = client(false).unwrap();
     provider.endpoint =
         url::Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
@@ -323,8 +323,8 @@ async fn cancellation_drops_a_pending_http_body() {
 #[tokio::test(start_paused = true)]
 async fn waiting_requests_recheck_new_cooldowns_and_preserve_spacing() {
     let provider = NyaaProvider::new().unwrap();
-    provider.reserve().await.unwrap();
-    let wait = provider.reserve();
+    provider.http.reserve().await.unwrap();
+    let wait = provider.http.reserve();
     tokio::pin!(wait);
     assert!(
         tokio::time::timeout(Duration::from_secs(1), &mut wait)
@@ -332,6 +332,7 @@ async fn waiting_requests_recheck_new_cooldowns_and_preserve_spacing() {
             .is_err()
     );
     provider
+        .http
         .cooldown(
             60,
             ProviderFailure::RateLimited {
@@ -344,9 +345,9 @@ async fn waiting_requests_recheck_new_cooldowns_and_preserve_spacing() {
         Err(ProviderFailure::RateLimited { .. })
     ));
     tokio::time::advance(Duration::from_secs(60)).await;
-    provider.reserve().await.unwrap();
+    provider.http.reserve().await.unwrap();
     assert!(
-        tokio::time::timeout(Duration::from_secs(1), provider.reserve())
+        tokio::time::timeout(Duration::from_secs(1), provider.http.reserve())
             .await
             .is_err()
     );
