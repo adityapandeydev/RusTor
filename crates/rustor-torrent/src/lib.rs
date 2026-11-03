@@ -4,7 +4,10 @@ mod input;
 mod session;
 
 pub use input::{TorrentId, TorrentInput};
-pub use session::{AddOptions, AddOutcome, Engine, EngineConfig, TorrentSnapshot, TorrentState};
+pub use session::{
+    AddOptions, AddOutcome, Engine, EngineConfig, PreparedTorrent, TorrentFile, TorrentSnapshot,
+    TorrentState,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

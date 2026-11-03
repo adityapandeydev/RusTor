@@ -57,6 +57,26 @@ pub struct AddOptions {
     pub initial_peers: Vec<SocketAddr>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct TorrentFile {
+    pub index: usize,
+    pub path: String,
+    pub length: u64,
+    pub selected: bool,
+}
+
+/// Resolved metadata only. Preparing never creates payload storage or a saved transfer.
+#[derive(Serialize)]
+pub struct PreparedTorrent {
+    pub id: TorrentId,
+    pub name: Option<String>,
+    pub files: Vec<TorrentFile>,
+    #[serde(skip)]
+    input: TorrentInput,
+    #[serde(skip)]
+    peers: Vec<SocketAddr>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AddOutcome {
     pub id: TorrentId,
@@ -177,7 +197,134 @@ impl Engine {
         })
     }
 
+    pub async fn prepare(
+        &self,
+        input: TorrentInput,
+        peers: Vec<SocketAddr>,
+    ) -> Result<PreparedTorrent, Error> {
+        let guard = self.session.read().await;
+        let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
+        let expected_id = input.id().clone();
+        let response = timeout(
+            self.metadata_timeout,
+            session.add_torrent(
+                input.into_native(),
+                Some(AddTorrentOptions {
+                    list_only: true,
+                    initial_peers: Some(peers.clone()),
+                    disable_trackers: !self.discovery,
+                    ..Default::default()
+                }),
+            ),
+        )
+        .await
+        .map_err(|_| Error::MetadataTimeout)?
+        .map_err(|e| backend("prepare torrent", e))?;
+        let (metadata, mut seen_peers) = match response {
+            AddTorrentResponse::ListOnly(list) => {
+                let input = TorrentInput::from_bytes(list.torrent_bytes.to_vec())?;
+                let files = list
+                    .info
+                    .iter_file_details()
+                    .enumerate()
+                    .map(|(index, f)| TorrentFile {
+                        index,
+                        path: f.filename.to_string(),
+                        length: f.len,
+                        selected: list
+                            .only_files
+                            .as_ref()
+                            .is_none_or(|ids| ids.contains(&index)),
+                    })
+                    .collect::<Vec<_>>();
+                if files.is_empty() || files.len() > 10_000 {
+                    return Err(Error::InvalidInput(
+                        "file list must contain between 1 and 10,000 files",
+                    ));
+                }
+                let name = list.info.name().map(|n| n.into_owned());
+                ((input, name, files), list.seen_peers)
+            }
+            AddTorrentResponse::AlreadyManaged(_, _) => {
+                return Err(Error::InvalidInput(
+                    "this torrent is already in your session",
+                ));
+            }
+            AddTorrentResponse::Added(_, _) => {
+                return Err(backend("prepare torrent", "unexpected managed transfer"));
+            }
+        };
+        let (input, name, files) = metadata;
+        if input.id() != &expected_id {
+            return Err(backend("prepare torrent", "metadata identity mismatch"));
+        }
+        seen_peers.extend(peers);
+        seen_peers.sort_unstable();
+        seen_peers.dedup();
+        Ok(PreparedTorrent {
+            id: expected_id,
+            name,
+            files,
+            input,
+            peers: seen_peers,
+        })
+    }
+
+    pub async fn add_prepared(
+        &self,
+        prepared: &PreparedTorrent,
+        files: Vec<usize>,
+        mut options: AddOptions,
+    ) -> Result<AddOutcome, Error> {
+        if files.is_empty()
+            || files.len() > prepared.files.len()
+            || files.iter().any(|&i| i >= prepared.files.len())
+        {
+            return Err(Error::InvalidInput("choose at least one valid file"));
+        }
+        let unique = files
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>();
+        if unique.len() != files.len() {
+            return Err(Error::InvalidInput("file selection contains duplicates"));
+        }
+        options.initial_peers.extend_from_slice(&prepared.peers);
+        self.add_inner(prepared.input.clone(), options, Some(files))
+            .await
+    }
+
+    pub async fn files(&self, id: &TorrentId) -> Result<Vec<TorrentFile>, Error> {
+        let guard = self.session.read().await;
+        let torrent = handle(&guard.as_ref().ok_or(Error::Stopped)?.native, id)?;
+        let metadata = torrent
+            .metadata
+            .load_full()
+            .ok_or_else(|| backend("list files", "metadata unavailable"))?;
+        let selected = torrent.only_files();
+        Ok(metadata
+            .info
+            .iter_file_details()
+            .enumerate()
+            .map(|(index, f)| TorrentFile {
+                index,
+                path: f.filename.to_string(),
+                length: f.len,
+                selected: selected.as_ref().is_none_or(|ids| ids.contains(&index)),
+            })
+            .collect())
+    }
+
     pub async fn add(&self, input: TorrentInput, options: AddOptions) -> Result<AddOutcome, Error> {
+        self.add_inner(input, options, None).await
+    }
+
+    async fn add_inner(
+        &self,
+        input: TorrentInput,
+        options: AddOptions,
+        only_files: Option<Vec<usize>>,
+    ) -> Result<AddOutcome, Error> {
         let destination = options
             .destination
             .map(|path| {
@@ -207,6 +354,7 @@ impl Engine {
                     preferred_id: Some(native_id),
                     output_folder: destination,
                     paused: options.paused,
+                    only_files,
                     initial_peers: Some(options.initial_peers),
                     disable_trackers: !self.discovery,
                     // Existing files are protected. Engine-owned restore explicitly enables

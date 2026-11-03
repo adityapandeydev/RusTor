@@ -42,11 +42,13 @@ impl TorrentId {
 }
 
 /// Validated input. Original metainfo bytes retain private flags and announce lists.
+#[derive(Clone)]
 pub struct TorrentInput {
     id: TorrentId,
     source: Source,
 }
 
+#[derive(Clone)]
 enum Source {
     Magnet(String),
     Metainfo(Vec<u8>),
