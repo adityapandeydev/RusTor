@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/rustor-torrent"]
+members = ["crates/rustor-torrent", "apps/desktop/src-tauri"]
 resolver = "3"
 
 [workspace.package]
