@@ -42,6 +42,7 @@ function api(snapshot = initial) {
     pause: vi.fn().mockResolvedValue(undefined),
     resume: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
+    retry: vi.fn().mockResolvedValue(undefined),
   };
   return { service, emit: (value: Snapshot) => receive(value), unsubscribe };
 }
@@ -300,4 +301,60 @@ it("allows an expired file list to be reloaded without re-entering the source", 
     "value",
     "magnet:?xt=urn:btih:test",
   );
+});
+
+it("shows failure guidance without expanding the row and retries the same torrent", async () => {
+  const { service } = api({
+    ...initial,
+    torrents: [
+      {
+        ...torrent,
+        state: "failed",
+        error: "Disk write failed: access denied",
+      },
+    ],
+  });
+  render(<App api={service} />);
+  expect(
+    await screen.findByText(/Check that the download folder/),
+  ).toBeDefined();
+  expect(screen.getByText("Disk write failed: access denied")).toBeDefined();
+  expect(
+    screen.queryByRole("button", { name: "Pause Authorized fixture.bin" }),
+  ).toBeNull();
+  vi.mocked(service.snapshot).mockResolvedValue({
+    ...initial,
+    revision: 2,
+    torrents: [{ ...torrent, state: "checking" }],
+  });
+  await userEvent.click(
+    screen.getByRole("button", { name: "Retry Authorized fixture.bin" }),
+  );
+  expect(service.retry).toHaveBeenCalledWith("abc");
+  expect(service.remove).not.toHaveBeenCalled();
+  await screen.findByText("Checking files");
+  expect(screen.queryByText(/Check that the download folder/)).toBeNull();
+  expect(screen.getByRole("status").textContent).toContain("Retry started");
+});
+
+it("keeps failed transfers visible when retry fails and unlocks the retry button", async () => {
+  const { service } = api({
+    ...initial,
+    torrents: [{ ...torrent, state: "failed", error: null }],
+  });
+  vi.mocked(service.retry).mockRejectedValue({
+    message: "Could not retry. Check the folder and try again.",
+  });
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Retry Authorized fixture.bin" }),
+  );
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "Could not retry",
+  );
+  expect(
+    screen.getByRole("button", { name: "Retry Authorized fixture.bin" }),
+  ).toHaveProperty("disabled", false);
+  expect(screen.getByText("Authorized fixture.bin")).toBeDefined();
+  expect(screen.queryByText("Retry started")).toBeNull();
 });
