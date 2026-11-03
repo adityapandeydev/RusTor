@@ -13,6 +13,11 @@ const initial: Snapshot = {
   phase: "ready",
   torrents: [],
   default_destination: "C:/Downloads/RusTor",
+  settings: {
+    default_destination: "C:/Downloads/RusTor",
+    download_limit_kib: 0,
+    upload_limit_kib: 0,
+  },
   error: null,
 };
 function api(snapshot = initial) {
@@ -43,6 +48,7 @@ function api(snapshot = initial) {
     resume: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
     retry: vi.fn().mockResolvedValue(undefined),
+    saveSettings: vi.fn().mockResolvedValue({ ...initial, revision: 2 }),
   };
   return { service, emit: (value: Snapshot) => receive(value), unsubscribe };
 }
@@ -357,4 +363,89 @@ it("keeps failed transfers visible when retry fails and unlocks the retry button
   ).toHaveProperty("disabled", false);
   expect(screen.getByText("Authorized fixture.bin")).toBeDefined();
   expect(screen.queryByText("Retry started")).toBeNull();
+});
+
+it("saves native folder handles and session limits from the download settings panel", async () => {
+  const { service } = api();
+  vi.mocked(service.pickDestination).mockResolvedValue({
+    id: "folder-settings",
+    label: "D:/Saved downloads",
+  });
+  vi.mocked(service.saveSettings).mockResolvedValue({
+    ...initial,
+    revision: 2,
+    default_destination: "D:/Saved downloads",
+    settings: {
+      default_destination: "D:/Saved downloads",
+      download_limit_kib: 128,
+      upload_limit_kib: 64,
+    },
+  });
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Download settings" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Choose default folder" }),
+  );
+  await userEvent.clear(screen.getByLabelText("Download limit (KiB/s)"));
+  await userEvent.type(screen.getByLabelText("Download limit (KiB/s)"), "128");
+  await userEvent.clear(screen.getByLabelText("Upload limit (KiB/s)"));
+  await userEvent.type(screen.getByLabelText("Upload limit (KiB/s)"), "64");
+  await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  await waitFor(() =>
+    expect(service.saveSettings).toHaveBeenCalledWith({
+      destination_id: "folder-settings",
+      download_limit_kib: 128,
+      upload_limit_kib: 64,
+    }),
+  );
+  expect(screen.getByRole("status").textContent).toContain("Settings saved");
+  expect(screen.queryByRole("form", { name: "Download settings" })).toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Download settings" }),
+  );
+  expect(screen.getByLabelText("Download limit (KiB/s)")).toHaveProperty(
+    "value",
+    "128",
+  );
+});
+
+it("rejects limits below one chunk and cancels settings without saving", async () => {
+  const { service } = api();
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Download settings" }),
+  );
+  await userEvent.clear(screen.getByLabelText("Download limit (KiB/s)"));
+  await userEvent.type(screen.getByLabelText("Download limit (KiB/s)"), "1");
+  await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("16");
+  expect(service.saveSettings).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Cancel settings" }),
+  );
+  expect(screen.queryByRole("form", { name: "Download settings" })).toBeNull();
+});
+
+it("preserves settings edits after a save error without claiming success", async () => {
+  const { service } = api();
+  vi.mocked(service.saveSettings).mockRejectedValue({
+    message: "Settings could not be saved. Try again.",
+  });
+  render(<App api={service} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Download settings" }),
+  );
+  await userEvent.clear(screen.getByLabelText("Upload limit (KiB/s)"));
+  await userEvent.type(screen.getByLabelText("Upload limit (KiB/s)"), "64");
+  await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "Settings could not be saved",
+  );
+  expect(screen.getByLabelText("Upload limit (KiB/s)")).toHaveProperty(
+    "value",
+    "64",
+  );
+  expect(screen.queryByRole("status")).toBeNull();
 });

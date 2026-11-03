@@ -16,6 +16,8 @@ use tokio::{
     sync::{Mutex, OnceCell},
 };
 
+use crate::settings::DownloadSettings;
+
 const MAX_METAINFO: u64 = 16 * 1024 * 1024;
 const MAX_SELECTIONS: usize = 32;
 
@@ -71,6 +73,7 @@ pub struct AppSnapshot {
     pub phase: EnginePhase,
     pub torrents: Vec<TorrentSnapshot>,
     pub default_destination: String,
+    pub settings: DownloadSettings,
     pub error: Option<CommandError>,
 }
 
@@ -100,6 +103,14 @@ pub struct PreparedSelection {
     pub id: String,
     pub name: Option<String>,
     pub files: Vec<TorrentFile>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SaveSettingsRequest {
+    pub destination_id: Option<String>,
+    pub download_limit_kib: u32,
+    pub upload_limit_kib: u32,
 }
 
 #[derive(Default)]
@@ -183,14 +194,16 @@ pub struct DesktopState {
     engine: OnceCell<Result<Engine, CommandError>>,
     config: Mutex<Option<EngineConfig>>,
     selections: Mutex<Selections>,
-    default_destination: PathBuf,
+    settings: Mutex<DownloadSettings>,
+    settings_path: PathBuf,
     revision: AtomicU64,
 }
 
 impl DesktopState {
     pub fn new(config: EngineConfig) -> Self {
         Self {
-            default_destination: config.download_dir.clone(),
+            settings: Mutex::new(DownloadSettings::defaults(config.download_dir.clone())),
+            settings_path: config.state_dir.join("settings.json"),
             stopping: AtomicBool::new(false),
             engine: OnceCell::new(),
             config: Mutex::new(Some(config)),
@@ -202,13 +215,21 @@ impl DesktopState {
     pub async fn initialize(&self) {
         self.engine
             .get_or_init(|| async {
-                let config = self
+                let mut config = self
                     .config
                     .lock()
                     .await
                     .take()
                     .ok_or_else(|| CommandError::new("stopped", "RusTor is shutting down."))?;
-                Engine::open(config).await.map_err(Into::into)
+                let saved =
+                    DownloadSettings::load(&self.settings_path, self.settings.lock().await.clone())
+                        .await?;
+                let limits = saved.limits()?;
+                config.download_limit_bps = limits.download_bps;
+                config.upload_limit_bps = limits.upload_bps;
+                let engine = Engine::open(config).await.map_err(CommandError::from)?;
+                *self.settings.lock().await = saved;
+                Ok(engine)
             })
             .await;
     }
@@ -233,13 +254,52 @@ impl DesktopState {
                 Err(error) => (EnginePhase::Failed, vec![], Some(error.into())),
             },
         };
+        let settings = self.settings.lock().await.clone();
         AppSnapshot {
             revision: self.revision.fetch_add(1, Ordering::Relaxed) + 1,
             phase,
             torrents,
             error,
-            default_destination: self.default_destination.to_string_lossy().into_owned(),
+            default_destination: settings.default_destination.to_string_lossy().into_owned(),
+            settings,
         }
+    }
+
+    pub async fn save_settings(
+        &self,
+        request: SaveSettingsRequest,
+    ) -> Result<AppSnapshot, CommandError> {
+        let mut current = self.settings.lock().await;
+        let engine = self.engine()?;
+        let destination = match request.destination_id {
+            Some(id) => {
+                let path = self.selections.lock().await.find(&id, true)?;
+                if !tokio::fs::metadata(&path)
+                    .await
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false)
+                {
+                    return Err(CommandError::new(
+                        "invalid_selection",
+                        "The selected folder is no longer available. Choose it again.",
+                    ));
+                }
+                path
+            }
+            None => current.default_destination.clone(),
+        };
+        let settings = DownloadSettings {
+            default_destination: destination,
+            download_limit_kib: request.download_limit_kib,
+            upload_limit_kib: request.upload_limit_kib,
+        };
+        let limits = settings.limits()?;
+        // A failed write leaves both committed preferences and active limits intact.
+        settings.save(self.settings_path.clone()).await?;
+        engine.set_speed_limits(limits).await?;
+        *current = settings;
+        drop(current);
+        Ok(self.snapshot().await)
     }
 
     pub async fn select(&self, path: PathBuf, folder: bool) -> Result<Selection, CommandError> {
@@ -299,12 +359,16 @@ impl DesktopState {
                 .transpose()?;
             (prepared, destination)
         };
+        let destination = match destination {
+            Some(folder) => folder,
+            None => prepared.destination_under(&self.settings.lock().await.default_destination),
+        };
         let result = engine
             .add_prepared(
                 &prepared,
                 request.files,
                 AddOptions {
-                    destination,
+                    destination: Some(destination),
                     ..Default::default()
                 },
             )
@@ -375,6 +439,7 @@ impl DesktopState {
     pub async fn shutdown(&self) {
         self.stopping.store(true, Ordering::Release);
         self.initialize().await;
+        let _settings = self.settings.lock().await;
         if let Some(Ok(engine)) = self.engine.get() {
             let _ = engine.shutdown().await;
         }
@@ -409,6 +474,86 @@ mod tests {
         let snapshot = state.snapshot().await;
         assert!(matches!(snapshot.phase, EnginePhase::Failed));
         assert!(snapshot.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn settings_apply_restore_and_failed_writes_do_not_change_live_limits() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("chosen");
+        tokio::fs::create_dir_all(&destination).await.unwrap();
+        let make_config = || {
+            let mut config =
+                EngineConfig::new(root.path().join("downloads"), root.path().join("state"));
+            config.discovery = false;
+            config
+        };
+        let mut state = DesktopState::new(make_config());
+        state.initialize().await;
+        let folder = state.select(destination.clone(), true).await.unwrap();
+        let saved = state
+            .save_settings(SaveSettingsRequest {
+                destination_id: Some(folder.id),
+                download_limit_kib: 64,
+                upload_limit_kib: 32,
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            saved.settings.default_destination,
+            tokio::fs::canonicalize(&destination).await.unwrap()
+        );
+        assert_eq!(
+            state.engine().unwrap().speed_limits().await.unwrap(),
+            saved.settings.limits().unwrap()
+        );
+        // Invalid input never changes the saved preferences or active limiter.
+        let committed = tokio::fs::read(&state.settings_path).await.unwrap();
+        assert!(
+            state
+                .save_settings(SaveSettingsRequest {
+                    destination_id: None,
+                    download_limit_kib: 1,
+                    upload_limit_kib: 0
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            tokio::fs::read(&state.settings_path).await.unwrap(),
+            committed
+        );
+        assert_eq!(
+            state.engine().unwrap().speed_limits().await.unwrap(),
+            saved.settings.limits().unwrap()
+        );
+        let committed_path = state.settings_path.clone();
+        state.settings_path = root.path().join("missing/settings.json");
+        assert!(
+            state
+                .save_settings(SaveSettingsRequest {
+                    destination_id: None,
+                    download_limit_kib: 256,
+                    upload_limit_kib: 128
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(state.snapshot().await.settings, saved.settings);
+        assert_eq!(
+            state.engine().unwrap().speed_limits().await.unwrap(),
+            saved.settings.limits().unwrap()
+        );
+        assert_eq!(tokio::fs::read(&committed_path).await.unwrap(), committed);
+        state.settings_path = committed_path;
+        state.shutdown().await;
+        let restored = DesktopState::new(make_config());
+        restored.initialize().await;
+        assert_eq!(restored.snapshot().await.settings, saved.settings);
+        assert_eq!(
+            restored.engine().unwrap().speed_limits().await.unwrap(),
+            saved.settings.limits().unwrap()
+        );
+        restored.shutdown().await;
     }
 
     #[test]
@@ -569,6 +714,21 @@ mod tests {
             rustor_torrent::TorrentState::Paused
         );
         state.resume(added.id.as_str()).await.unwrap();
+        let future_folder = root.path().join("future-downloads");
+        tokio::fs::create_dir_all(&future_folder).await.unwrap();
+        let future_selection = state.select(future_folder.clone(), true).await.unwrap();
+        state
+            .save_settings(SaveSettingsRequest {
+                destination_id: Some(future_selection.id),
+                download_limit_kib: 0,
+                upload_limit_kib: 0,
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            state.snapshot().await.torrents[0].destination,
+            tokio::fs::canonicalize(&destination).await.unwrap()
+        );
         assert_eq!(
             state.retry(added.id.as_str()).await.unwrap_err().code,
             "invalid_input"
@@ -576,6 +736,41 @@ mod tests {
         assert_eq!(state.snapshot().await.torrents.len(), 1);
         state.remove(added.id.as_str()).await.unwrap();
         assert!(state.snapshot().await.torrents.is_empty());
+        assert_eq!(
+            tokio::fs::read(destination.join("authorized.bin"))
+                .await
+                .unwrap(),
+            data
+        );
+        let prepared = state
+            .prepare_with_peers(
+                AddSource::File { id: file.id },
+                vec![seeder.listen_addr().unwrap()],
+            )
+            .await
+            .unwrap();
+        state
+            .start(StartRequest {
+                prepared_id: prepared.id,
+                files: vec![0],
+                destination_id: None,
+            })
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while state.snapshot().await.torrents[0].state != rustor_torrent::TorrentState::Seeding
+            {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            tokio::fs::read(future_folder.join("authorized.bin"))
+                .await
+                .unwrap(),
+            data
+        );
         assert_eq!(
             tokio::fs::read(destination.join("authorized.bin"))
                 .await

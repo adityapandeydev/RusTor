@@ -1,7 +1,9 @@
 mod service;
+mod settings;
 
 use service::{
-    AddSource, AppSnapshot, CommandError, DesktopState, PreparedSelection, Selection, StartRequest,
+    AddSource, AppSnapshot, CommandError, DesktopState, PreparedSelection, SaveSettingsRequest,
+    Selection, StartRequest,
 };
 use std::{
     sync::{Arc, atomic::Ordering},
@@ -96,6 +98,14 @@ async fn start_prepared(
 }
 
 #[tauri::command]
+async fn save_settings(
+    request: SaveSettingsRequest,
+    state: tauri::State<'_, Arc<DesktopState>>,
+) -> Result<AppSnapshot, CommandError> {
+    state.save_settings(request).await
+}
+
+#[tauri::command]
 async fn pause_torrent(
     id: String,
     state: tauri::State<'_, Arc<DesktopState>>,
@@ -140,7 +150,8 @@ pub fn run() {
             pause_torrent,
             resume_torrent,
             remove_torrent,
-            retry_torrent
+            retry_torrent,
+            save_settings
         ])
         .setup(|app| {
             let download_dir = app.path().download_dir()?.join("RusTor");
