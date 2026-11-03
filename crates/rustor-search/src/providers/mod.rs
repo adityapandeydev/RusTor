@@ -24,3 +24,6 @@ pub use tpb::TpbProvider;
 pub use x1337::X1337Provider;
 #[cfg(test)]
 mod test_support;
+
+mod eztv;
+pub use eztv::EztvProvider;
