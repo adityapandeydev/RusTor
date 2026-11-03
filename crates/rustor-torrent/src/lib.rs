@@ -1,6 +1,7 @@
 //! Native torrent lifecycle for RusTor. No desktop or terminal UI dependencies.
 
 mod input;
+mod retry_storage;
 mod session;
 
 pub use input::{TorrentId, TorrentInput};

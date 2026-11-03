@@ -3851,6 +3851,7 @@ dependencies = [
 name = "rustor-torrent"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "librqbit",
  "serde",
  "tempfile",

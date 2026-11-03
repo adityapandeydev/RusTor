@@ -12,7 +12,7 @@ use std::{
 use librqbit::{
     AddTorrentOptions, AddTorrentResponse, DhtSessionConfig, ListenerOptions, ManagedTorrent,
     Session, SessionOptions, SessionPersistenceConfig, TorrentStatsState, api::TorrentIdOrHash,
-    limits::LimitsConfig,
+    limits::LimitsConfig, storage::StorageFactoryExt,
 };
 use serde::Serialize;
 use tokio::{
@@ -360,6 +360,9 @@ impl Engine {
                     // Existing files are protected. Engine-owned restore explicitly enables
                     // overwrite for its already-managed data, followed by verification.
                     overwrite: false,
+                    storage_factory: Some(
+                        crate::retry_storage::RetryStorageFactory::default().boxed(),
+                    ),
                     ..Default::default()
                 }),
             ),
@@ -433,6 +436,21 @@ impl Engine {
             .map_err(|e| backend("resume torrent", e))
     }
 
+    /// Retry only a failed transfer, rechecking its existing data in place.
+    pub async fn retry(&self, id: &TorrentId) -> Result<(), Error> {
+        let _control = self.controls.lock().await;
+        let guard = self.session.read().await;
+        let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
+        let torrent = handle(session, id)?;
+        if !matches!(torrent.stats().state, TorrentStatsState::Error) {
+            return Err(Error::InvalidInput("only failed transfers can be retried"));
+        }
+        session
+            .unpause(&torrent)
+            .await
+            .map_err(|e| backend("retry torrent", e))
+    }
+
     /// Stop downloading/seeding and forget the torrent. Payload files are always kept.
     pub async fn remove(&self, id: &TorrentId) -> Result<(), Error> {
         let _control = self.controls.lock().await;
@@ -495,5 +513,173 @@ fn backend(operation: &'static str, error: impl std::fmt::Display) -> Error {
     Error::Backend {
         operation,
         message: error.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    use librqbit::{
+        AddTorrent, CreateTorrentOptions, create_torrent, spawn_utils::BlockingSpawner,
+    };
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn retry_rechecks_owned_files_preserves_selection_and_does_not_duplicate() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("seed/collection");
+        tokio::fs::create_dir_all(&source).await.unwrap();
+        let data = vec![42u8; 128 * 1024];
+        tokio::fs::write(source.join("wanted.bin"), &data)
+            .await
+            .unwrap();
+        tokio::fs::write(source.join("skip.bin"), vec![9u8; 128 * 1024])
+            .await
+            .unwrap();
+        let bytes = create_torrent(
+            &source,
+            CreateTorrentOptions {
+                piece_length: Some(16 * 1024),
+                ..Default::default()
+            },
+            &BlockingSpawner::new(1),
+        )
+        .await
+        .unwrap()
+        .as_bytes()
+        .unwrap();
+        let seeder = Session::new_with_opts(
+            root.path().join("seed"),
+            SessionOptions {
+                dht: None,
+                disable_trackers: true,
+                disable_local_service_discovery: true,
+                listen: Some(ListenerOptions {
+                    listen_addr: "127.0.0.1:0".parse().unwrap(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        seeder
+            .add_torrent(
+                AddTorrent::from_bytes(bytes.clone()),
+                Some(AddTorrentOptions {
+                    overwrite: true,
+                    ..Default::default()
+                }),
+            )
+            .await
+            .unwrap()
+            .into_handle()
+            .unwrap()
+            .wait_until_completed()
+            .await
+            .unwrap();
+        let mut config =
+            EngineConfig::new(root.path().join("downloads"), root.path().join("state"));
+        config.discovery = false;
+        let engine = Engine::open(config).await.unwrap();
+        let prepared = engine
+            .prepare(
+                TorrentInput::from_bytes(bytes.to_vec()).unwrap(),
+                vec![seeder.listen_addr().unwrap()],
+            )
+            .await
+            .unwrap();
+        let wanted = prepared
+            .files
+            .iter()
+            .find(|f| f.path.ends_with("wanted.bin"))
+            .unwrap()
+            .index;
+        crate::retry_storage::FAIL_WRITES.store(true, Ordering::Release);
+        let added = engine
+            .add_prepared(&prepared, vec![wanted], AddOptions::default())
+            .await
+            .unwrap();
+        timeout(Duration::from_secs(5), async {
+            while engine.snapshot(&added.id).await.unwrap().state != TorrentState::Failed {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        // A persistent write error leaves the same transfer retryable.
+        engine.retry(&added.id).await.unwrap();
+        timeout(Duration::from_secs(5), async {
+            while engine.snapshot(&added.id).await.unwrap().state != TorrentState::Failed {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(engine.list().await.unwrap().len(), 1);
+        crate::retry_storage::FAIL_WRITES.store(false, Ordering::Release);
+        let path = root.path().join("downloads/collection/wanted.bin");
+        // A verified piece must survive recovery, while the remaining bytes are downloaded.
+        let mut partial = vec![0u8; data.len()];
+        partial[..16 * 1024].copy_from_slice(&data[..16 * 1024]);
+        tokio::fs::write(&path, &partial).await.unwrap();
+        assert_eq!(
+            engine.snapshot(&added.id).await.unwrap().state,
+            TorrentState::Failed
+        );
+        engine.retry(&added.id).await.unwrap();
+        timeout(Duration::from_secs(10), async {
+            loop {
+                let state = engine.snapshot(&added.id).await.unwrap();
+                assert_ne!(state.state, TorrentState::Failed, "{:?}", state.error);
+                if state.state == TorrentState::Seeding {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(tokio::fs::read(&path).await.unwrap(), data);
+        assert_eq!(
+            engine
+                .files(&added.id)
+                .await
+                .unwrap()
+                .iter()
+                .filter(|f| f.selected)
+                .map(|f| f.index)
+                .collect::<Vec<_>>(),
+            vec![wanted]
+        );
+        assert_eq!(engine.list().await.unwrap().len(), 1);
+        assert!(matches!(
+            engine.retry(&added.id).await,
+            Err(Error::InvalidInput(_))
+        ));
+        engine.shutdown().await.unwrap();
+        let mut config =
+            EngineConfig::new(root.path().join("downloads"), root.path().join("state"));
+        config.discovery = false;
+        let restored = Engine::open(config).await.unwrap();
+        timeout(Duration::from_secs(5), async {
+            while restored.snapshot(&added.id).await.unwrap().state != TorrentState::Seeding {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            restored
+                .files(&added.id)
+                .await
+                .unwrap()
+                .iter()
+                .filter(|f| f.selected)
+                .map(|f| f.index)
+                .collect::<Vec<_>>(),
+            vec![wanted]
+        );
+        restored.shutdown().await.unwrap();
+        seeder.stop().await;
     }
 }
