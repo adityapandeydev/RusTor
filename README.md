@@ -2,7 +2,7 @@
 
 A Rust-powered desktop BitTorrent application in development, with a React and TypeScript interface delivered through Tauri 2.
 
-Status: the native engine and first desktop Downloads screen are implemented. Local transfer and service tests run on Windows. Discover registers all ten Torlink source entries through the Rust backend. Some upstream endpoints are currently unavailable or require sign-in, so implemented coverage does not guarantee every source will return results. Advanced queue management and release installers remain pending.
+Status: the native engine and desktop Downloads screen are implemented. Local transfer and service tests run on Windows. Discover registers all ten Torlink source entries through the Rust backend. Some upstream endpoints are currently unavailable or require sign-in, so implemented coverage does not guarantee every source will return results. Unsigned preview packaging is configured for Windows, Linux and macOS; signed public releases and advanced queue management remain pending.
 
 Frontend: React, TypeScript, Bun, Vite, and Tailwind CSS v4. The backend will port Torlink's useful non-TUI behavior into Rust, using a proven torrent protocol library where suitable.
 
@@ -16,7 +16,7 @@ Tests use generated data and local peers. They cover byte integrity, duplicate a
 
 Restoration rechecks every payload piece instead of trusting cached fast-resume bits. This can take longer for large downloads, but progress is rebuilt from verified data on disk. Operations on the same torrent are serialized through their save checks; unrelated torrents can still resolve metadata and download concurrently.
 
-The native library remains the only session writer. The adapter reads its pinned JSON format to verify identity, pause state, destination and file selection after add/pause/resume/retry, and to confirm removal. Reads are capped at 64 MiB for session JSON and 16 MiB per saved metainfo file. New transfers whose saved metadata cannot be confirmed are stopped and removed with payload bytes kept. A failed save is reported through the desktop error banner: the active change may already have happened, and an unsaved removal or pause state can revert after restart. This check confirms the current saved contents, not power-loss durability. Missing/corrupt saved metadata or skipped restoration records produce a startup recovery error rather than silently opening a partial session; keep the session and payload files for recovery.
+The native library remains the only session writer. The adapter reads its pinned JSON format to verify identity, pause state, destination and file selection after add/pause/resume/retry, and to confirm removal. It allows up to one second for pending native writes to become readable before reporting an unconfirmed save. Reads are capped at 64 MiB for session JSON and 16 MiB per saved metainfo file. New transfers whose saved metadata cannot be confirmed are stopped and removed with payload bytes kept. An unconfirmed save is reported through the desktop error banner: the active change may already have happened, and an unsaved removal or pause state can revert after restart. This check confirms the current saved contents, not power-loss durability. Missing/corrupt saved metadata or skipped restoration records produce a startup recovery error rather than silently opening a partial session; keep the session and payload files for recovery.
 
 With the Rust toolchain and platform C/C++ build prerequisites installed:
 
@@ -109,6 +109,34 @@ Validation so far includes the native window rendering with an engine-ready resp
 
 Searchable-content coverage expands through provider integrations; the torrent library does not supply a catalog. Drag-and-drop, notifications, payload deletion, changing file selection after addition, and download queue policies are follow-up work.
 
+## Preview packages
+
+Packaging uses the same Rust and frontend code on native runners:
+
+| Target | Outputs |
+| --- | --- |
+| Windows x64 | NSIS `.exe` installer and standalone `.zip` |
+| Linux x64 | `.AppImage` and `.deb`, built on Ubuntu 22.04 |
+| macOS Apple Silicon | `.dmg` containing the application |
+| macOS Intel | `.dmg` containing the application |
+
+Install the release tools globally in your user profile, then package on the target OS with the development prerequisites installed:
+
+```sh
+cargo install cargo-audit --version 0.22.2 --locked
+cargo install cargo-about --version 0.9.3 --features cli --locked
+bun run test:packaging
+bun run desktop:package
+```
+
+This command audits the lockfiles, builds the frontend, generates Rust/frontend dependency notices, and creates an optimized, explicitly unsigned package. Use this entry point to include the generated notices; the normal `desktop:build` command continues to produce an executable without an installer. Output is under the Cargo target directory's `packages/<native-target>/<version>-<run>/`, and respects `CARGO_TARGET_DIR`. Each output folder includes `SHA256SUMS`, the project license/README, `THIRD_PARTY_NOTICES.txt`, and build provenance. Dirty local builds are labeled in `BUILD-INFO.json`. The standalone Windows ZIP includes the executable and license files, requires WebView2, and uses the same application-data profile as an installed copy; it is not a separate portable profile. The installer can download WebView2 when missing, requiring an internet connection for that setup step. Users do not need Rust, Bun or Node.js.
+
+The Desktop packages workflow runs checks and native builds for all four targets on pull requests, main pushes and manual dispatch. Successful packages are attached as short-lived workflow artifacts. It has read-only repository permissions and does not create tags, publish releases, or access signing secrets. Building on CI does not establish native UI compatibility: Linux/macOS first launch, pickers and installer behavior still require target-platform checks. Linux distribution compatibility and bundled system-library notices also need review before public AppImage publication.
+
+These preview packages are unsigned; macOS notarization is not configured. Git SSH signatures authenticate source commits and do not sign application packages. Public distribution needs a separate signing/notarization setup, platform validation and review of generated notices. No automatic updater is included.
+
+RustSec currently reports two upstream informational warnings in the GTK dependency stack: [proc-macro-error maintenance](https://rustsec.org/advisories/RUSTSEC-2024-0370) and [glib VariantStrIter unsoundness](https://rustsec.org/advisories/RUSTSEC-2024-0429). They remain visible in audit output; no advisory ignore list is configured. The ringbuf vulnerability was addressed with the pinned upstream µTP fix described below. Dependency audits do not substitute for an application security assessment.
+
 ## Acknowledgements
 
 RusTor is an independent project inspired by [Torlink](https://github.com/baairon/torlink), developed by bairon.dev and its contributors. Its search, torrent-management, and persistence behavior provides the foundation for our planned Rust port. RusTor is not an official Torlink release and does not develop or ship its TUI.
@@ -145,5 +173,7 @@ SOFTWARE.
 </details>
 
 The native protocol implementation is provided by [librqbit / rqbit](https://github.com/ikatson/rqbit), developed by Igor Katson and contributors and licensed under Apache-2.0. Our local transfer tests draw on its public API examples and testing approach. RusTor does not claim authorship of that protocol implementation.
+
+The µTP dependency uses the upstream [librqbit-utp security fix](https://github.com/ikatson/librqbit-utp/commit/f119a999657d66fe2c2322613428241ce8a69f23), pinned until a fixed crate release is available. It replaces the affected ringbuf dependency with a fixed version for RUSTSEC-2026-0293. The transport source remains upstream's Apache-2.0 implementation.
 
 RusTor's original code is licensed under the [MIT License](LICENSE). Third-party dependencies retain their own licenses; release packaging must include their applicable notices.

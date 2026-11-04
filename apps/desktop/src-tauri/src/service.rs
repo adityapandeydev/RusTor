@@ -49,7 +49,7 @@ impl From<rustor_torrent::Error> for CommandError {
             Error::Stopped => Self::new("stopped", "RusTor is shutting down."),
             Error::SessionNotSaved => Self::new(
                 "session_not_saved",
-                "The active torrent may have changed, but its session could not be saved. Check free space and permissions in RusTor's application-data folder. A removed torrent may return, or its pause state may change, after restarting.",
+                "The active torrent may have changed, but RusTor could not confirm that its session was saved. Check free space and permissions in RusTor's application-data folder. A removed torrent may return, or its pause state may change, after restarting.",
             ),
             Error::RestoreFailed => Self::new(
                 "session_restore_failed",

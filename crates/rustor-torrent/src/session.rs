@@ -464,11 +464,7 @@ impl Engine {
                 "engine returned a different torrent identity",
             ));
         }
-        let persisted = async {
-            self.persistence.verify_present(&handle).await?;
-            self.persistence.verify_metainfo(&id).await
-        }
-        .await;
+        let persisted = self.persistence.verify_added(&handle, &id).await;
         if let Err(error) = persisted {
             if !already_managed {
                 // A failed add must not silently keep downloading. Keep any

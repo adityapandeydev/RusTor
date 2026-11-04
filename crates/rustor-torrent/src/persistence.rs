@@ -5,7 +5,9 @@ use librqbit::{ManagedTorrent, Session, api::TorrentIdOrHash};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
+    future::Future,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use tokio::io::AsyncReadExt;
 
@@ -83,6 +85,10 @@ impl Persistence {
     }
 
     pub async fn verify_present(&self, handle: &ManagedTorrent) -> Result<(), Error> {
+        confirm_saved(|| self.verify_present_once(handle)).await
+    }
+
+    async fn verify_present_once(&self, handle: &ManagedTorrent) -> Result<(), Error> {
         let saved = self.read(false).await?;
         if !saved
             .torrents
@@ -95,6 +101,10 @@ impl Persistence {
     }
 
     pub async fn verify_removed(&self, id: &TorrentId) -> Result<(), Error> {
+        confirm_saved(|| self.verify_removed_once(id)).await
+    }
+
+    async fn verify_removed_once(&self, id: &TorrentId) -> Result<(), Error> {
         let saved = self.read(false).await?;
         if saved
             .torrents
@@ -105,6 +115,34 @@ impl Persistence {
         }
         Ok(())
     }
+
+    pub async fn verify_added(&self, handle: &ManagedTorrent, id: &TorrentId) -> Result<(), Error> {
+        confirm_saved(|| async {
+            self.verify_present_once(handle).await?;
+            self.verify_metainfo(id).await
+        })
+        .await
+    }
+}
+
+// The pinned native writer uses Tokio File::write_all without flush. Its last
+// blocking write can still be pending when the operation returns. Confirm the
+// postcondition within a fixed budget; a failed save still returns an error.
+async fn confirm_saved<F, Fut>(check: F) -> Result<(), Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<(), Error>>,
+{
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if check().await.is_ok() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| Error::SessionNotSaved)
 }
 
 impl SavedSession {
@@ -147,6 +185,28 @@ async fn read_bounded(path: &Path, limit: u64) -> std::io::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn waits_for_pending_writes_but_rejects_a_save_that_never_finishes() {
+        let committed = std::sync::atomic::AtomicBool::new(false);
+        let check = || async {
+            if committed.load(std::sync::atomic::Ordering::Acquire) {
+                Ok(())
+            } else {
+                Err(Error::SessionNotSaved)
+            }
+        };
+        let write = async {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            committed.store(true, std::sync::atomic::Ordering::Release);
+        };
+        let (result, ()) = tokio::join!(confirm_saved(check), write);
+        result.unwrap();
+        assert!(matches!(
+            confirm_saved(|| async { Err(Error::SessionNotSaved) }).await,
+            Err(Error::SessionNotSaved)
+        ));
+    }
 
     #[tokio::test]
     async fn bounds_saved_reads_and_rejects_malformed_schema_without_replacing_it() {

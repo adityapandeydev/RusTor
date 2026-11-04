@@ -302,7 +302,6 @@ async fn cancellation_drops_a_pending_http_body() {
         tokio::time::timeout(Duration::from_secs(3), socket.read(&mut byte))
             .await
             .unwrap()
-            .unwrap()
     });
     let service = SearchService::new(vec![Arc::new(provider)], SearchConfig::default()).unwrap();
     let mut handle = service
@@ -318,7 +317,15 @@ async fn cancellation_drops_a_pending_http_body() {
     .await
     .unwrap();
     assert_eq!(handle.snapshot().phase, SearchPhase::Cancelled);
-    assert_eq!(server.await.unwrap(), 0);
+    match server.await.unwrap() {
+        Ok(0) => {}
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+            ) => {}
+        other => panic!("cancelled HTTP request left an unexpected socket result: {other:?}"),
+    }
 }
 #[tokio::test(start_paused = true)]
 async fn waiting_requests_recheck_new_cooldowns_and_preserve_spacing() {

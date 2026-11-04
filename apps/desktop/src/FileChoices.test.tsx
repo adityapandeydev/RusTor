@@ -6,6 +6,7 @@ import { FileChoices } from "./FileChoices";
 
 afterEach(cleanup);
 it("keeps selections across pages and search while rendering at most 100 checkboxes", async () => {
+  const user = userEvent.setup();
   const files = Array.from({ length: 205 }, (_, index) => ({
     index,
     path: `folder/file-${index}.bin`,
@@ -27,20 +28,16 @@ it("keeps selections across pages and search while rendering at most 100 checkbo
   }
   render(<Harness />);
   expect(screen.getAllByRole("checkbox")).toHaveLength(100);
-  await userEvent.click(
-    screen.getByRole("checkbox", { name: "folder/file-0.bin" }),
-  );
+  await user.click(screen.getByLabelText("folder/file-0.bin"));
   await userEvent.click(screen.getByRole("button", { name: "Next files" }));
   expect(
-    screen.getByRole("checkbox", { name: "folder/file-100.bin" }),
+    screen.getByLabelText("folder/file-100.bin"),
   ).toHaveProperty("checked", true);
-  await userEvent.type(
-    screen.getByRole("textbox", { name: "Find files in torrent" }),
-    "file-0.bin",
-  );
+  await user.click(screen.getByRole("textbox", { name: "Find files in torrent" }));
+  await user.paste("file-0.bin");
   expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   expect(
-    screen.getByRole("checkbox", { name: "folder/file-0.bin" }),
+    screen.getByLabelText("folder/file-0.bin"),
   ).toHaveProperty("checked", false);
   await userEvent.click(
     screen.getByRole("button", { name: "Clear selection" }),
