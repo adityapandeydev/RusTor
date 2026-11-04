@@ -68,6 +68,7 @@ const torrent: Torrent = {
 
 describe("Downloads desktop flow", () => {
   it("adds a magnet and the selected native destination", async () => {
+    const user = userEvent.setup();
     const { service } = api();
     vi.mocked(service.pickDestination).mockResolvedValue({
       id: "folder-1",
@@ -77,10 +78,8 @@ describe("Downloads desktop flow", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Add torrent" }),
     );
-    await userEvent.type(
-      screen.getByLabelText("Magnet link or infohash"),
-      "magnet:?xt=urn:btih:test",
-    );
+    await user.click(screen.getByLabelText("Magnet link or infohash"));
+    await user.paste("magnet:?xt=urn:btih:test");
     await userEvent.click(
       screen.getByRole("button", { name: "Choose folder" }),
     );
