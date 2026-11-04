@@ -101,10 +101,14 @@ struct Registered {
     provider: Arc<dyn Provider>,
     descriptor: ProviderDescriptor,
 }
+struct Shared {
+    permits: Semaphore,
+    cache: Mutex<crate::cache::Cache>,
+}
 pub struct SearchService {
     providers: Vec<Registered>,
     config: SearchConfig,
-    permits: Arc<Semaphore>,
+    shared: Arc<Shared>,
     next_id: AtomicU64,
     current: Mutex<Option<(u64, CancellationToken)>>,
 }
@@ -138,7 +142,10 @@ impl SearchService {
         registered.sort_by(|a, b| a.descriptor.id.cmp(&b.descriptor.id));
         Ok(Self {
             providers: registered,
-            permits: Arc::new(Semaphore::new(config.concurrency)),
+            shared: Arc::new(Shared {
+                permits: Semaphore::new(config.concurrency),
+                cache: Mutex::new(crate::cache::Cache::default()),
+            }),
             config,
             next_id: AtomicU64::new(1),
             current: Mutex::new(None),
@@ -205,7 +212,7 @@ impl SearchService {
         let task = runtime.spawn(run(
             selected,
             self.config.clone(),
-            self.permits.clone(),
+            self.shared.clone(),
             request,
             snapshot,
             sender,
@@ -246,19 +253,37 @@ type Outcome = Result<Result<Vec<Candidate>, ProviderFailure>, tokio::time::erro
 async fn run(
     providers: Vec<Registered>,
     config: SearchConfig,
-    permits: Arc<Semaphore>,
+    shared: Arc<Shared>,
     request: SearchRequest,
     mut snapshot: SearchSnapshot,
     sender: watch::Sender<Arc<SearchSnapshot>>,
     cancel: CancellationToken,
 ) {
-    let mut pending = (0..providers.len()).collect::<VecDeque<_>>();
+    let mut pending = VecDeque::new();
     let mut jobs = JoinSet::<(usize, Outcome)>::new();
     let mut identities = HashMap::<Id, usize>::new();
     let mut index = ResultIndex::default();
     let deadline = tokio::time::Instant::now() + config.overall_timeout;
     let overall = tokio::time::sleep_until(deadline);
     tokio::pin!(overall);
+    // Hydrate every fresh hit before scheduling misses, even when provider permits are busy.
+    for (i, provider) in providers.iter().enumerate() {
+        let cached = shared
+            .cache
+            .lock()
+            .ok()
+            .and_then(|mut cache| cache.get(&provider.descriptor.id, &request.query));
+        if let Some(rows) = cached {
+            snapshot.providers[i].status = accept_rows(
+                &mut index,
+                &provider.descriptor,
+                &rows,
+                config.max_per_provider,
+            );
+        } else {
+            pending.push_back(i);
+        }
+    }
     let (phase, status) = loop {
         if cancel.is_cancelled() {
             break (SearchPhase::Cancelled, ProviderStatus::Cancelled);
@@ -272,10 +297,10 @@ async fn run(
             let provider = providers[i].provider.clone();
             let query = request.query.clone();
             let timeout = config.provider_timeout;
-            let permits = permits.clone();
+            let shared = shared.clone();
             snapshot.providers[i].status = ProviderStatus::Running;
             let job = jobs.spawn(async move {
-                let _permit = match permits.acquire_owned().await {
+                let _permit = match shared.permits.acquire().await {
                     Ok(permit) => permit,
                     Err(_) => return (i, Ok(Err(ProviderFailure::Unavailable))),
                 };
@@ -308,11 +333,14 @@ async fn run(
                             Err(_) => ProviderStatus::TimedOut,
                             Ok(Err(failure)) => ProviderStatus::Failed { failure },
                             Ok(Ok(rows)) => {
-                                let truncated = rows.len()>config.max_per_provider; let mut accepted=0; let mut rejected=0;
-                                for row in rows.into_iter().take(config.max_per_provider) {
-                                    if index.insert(&providers[i].descriptor,row).is_ok() { accepted+=1; } else { rejected+=1; }
+                                let status = accept_rows(&mut index, &providers[i].descriptor, &rows, config.max_per_provider);
+                                // Only fully valid successful responses are reusable. A failed/cancelled
+                                // provider or malformed response must be allowed to recover on retry.
+                                if matches!(status,ProviderStatus::Complete { rejected: 0,.. }) && !cancel.is_cancelled()
+                                    && let Ok(mut cache)=shared.cache.lock() {
+                                    cache.insert(&providers[i].descriptor.id,&request.query,&rows,config.max_per_provider);
                                 }
-                                ProviderStatus::Complete { accepted,rejected,truncated }
+                                status
                             }
                         };
                     }
@@ -327,6 +355,27 @@ async fn run(
     finish(&mut snapshot, phase, status);
     jobs.abort_all();
     publish(&index, &request, &config, &mut snapshot, &sender);
+}
+fn accept_rows(
+    index: &mut ResultIndex,
+    descriptor: &ProviderDescriptor,
+    rows: &[Candidate],
+    cap: usize,
+) -> ProviderStatus {
+    let mut accepted = 0;
+    let mut rejected = 0;
+    for row in rows.iter().take(cap) {
+        if index.insert(descriptor, row.clone()).is_ok() {
+            accepted += 1;
+        } else {
+            rejected += 1;
+        }
+    }
+    ProviderStatus::Complete {
+        accepted,
+        rejected,
+        truncated: rows.len() > cap,
+    }
 }
 fn finish(snapshot: &mut SearchSnapshot, phase: SearchPhase, status: ProviderStatus) {
     snapshot.phase = phase;
