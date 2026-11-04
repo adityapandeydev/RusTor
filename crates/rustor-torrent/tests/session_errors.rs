@@ -72,6 +72,49 @@ async fn unresolved_magnet_times_out_without_blocking_snapshots() {
 }
 
 #[tokio::test]
+async fn rejects_invalid_initial_speed_limits_before_creating_state() {
+    for rate in [
+        1,
+        16 * 1024 - 1,
+        rustor_torrent::SpeedLimits::MAX_BPS + 1,
+        u32::MAX,
+    ] {
+        for upload in [false, true] {
+            let root = TempDir::new().unwrap();
+            let mut cfg = config(root.path());
+            if upload {
+                cfg.upload_limit_bps = std::num::NonZeroU32::new(rate);
+            } else {
+                cfg.download_limit_bps = std::num::NonZeroU32::new(rate);
+            }
+            assert!(matches!(
+                Engine::open(cfg).await,
+                Err(Error::InvalidConfig(_))
+            ));
+            assert!(!root.path().join("state").exists());
+        }
+    }
+}
+
+#[tokio::test]
+async fn accepts_initial_speed_limit_boundaries_without_opening_payload_storage() {
+    for rate in [0, 16 * 1024, rustor_torrent::SpeedLimits::MAX_BPS] {
+        let root = TempDir::new().unwrap();
+        let mut cfg = config(root.path());
+        cfg.download_limit_bps = std::num::NonZeroU32::new(rate);
+        cfg.upload_limit_bps = std::num::NonZeroU32::new(rate);
+        let expected = rustor_torrent::SpeedLimits {
+            download_bps: cfg.download_limit_bps,
+            upload_bps: cfg.upload_limit_bps,
+        };
+        let engine = Engine::open(cfg).await.unwrap();
+        assert_eq!(engine.speed_limits().await.unwrap(), expected);
+        assert!(!root.path().join("downloads").exists());
+        engine.shutdown().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn unknown_torrent_and_stopped_engine_return_typed_errors() {
     let root = TempDir::new().unwrap();
     let engine = Engine::open(config(root.path())).await.unwrap();

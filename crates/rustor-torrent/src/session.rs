@@ -166,11 +166,19 @@ impl Engine {
         if config.metadata_timeout.is_zero() {
             return Err(Error::InvalidConfig("metadata timeout must be positive"));
         }
-        for dir in [&config.download_dir, &config.state_dir] {
-            tokio::fs::create_dir_all(dir)
-                .await
-                .map_err(|e| backend("create engine directory", e))?;
+        SpeedLimits {
+            download_bps: config.download_limit_bps,
+            upload_bps: config.upload_limit_bps,
         }
+        .validate()
+        .map_err(|_| {
+            Error::InvalidConfig("initial speed limits are outside the supported range")
+        })?;
+        // Payload storage is opened when a transfer starts. An unavailable
+        // default must not block previews or transfers at other destinations.
+        tokio::fs::create_dir_all(&config.state_dir)
+            .await
+            .map_err(|e| backend("create engine directory", e))?;
         let directory_lock = tokio::fs::OpenOptions::new()
             .create(true)
             .truncate(false)

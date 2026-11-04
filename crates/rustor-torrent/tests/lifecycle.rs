@@ -205,6 +205,9 @@ async fn existing_unrelated_file_is_not_overwritten() {
     let root = TempDir::new().unwrap();
     let engine = Engine::open(config(root.path())).await.unwrap();
     let path = root.path().join("downloads/fixture.bin");
+    tokio::fs::create_dir_all(path.parent().unwrap())
+        .await
+        .unwrap();
     tokio::fs::write(&path, b"user-owned file").await.unwrap();
     let outcome = engine
         .add(
@@ -300,6 +303,60 @@ async fn removes_an_incomplete_download_without_deleting_its_partial_file() {
     engine.shutdown().await.unwrap();
     let restored = Engine::open(cfg).await.unwrap();
     assert!(restored.list().await.unwrap().is_empty());
+    restored.shutdown().await.unwrap();
+    fixture.session.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unavailable_default_folder_does_not_block_an_alternate_destination() {
+    let fixture = Fixture::new().await;
+    let root = TempDir::new().unwrap();
+    let cfg = config(root.path());
+    // A file at the default directory path models a folder that cannot be used.
+    tokio::fs::write(&cfg.download_dir, b"unrelated file")
+        .await
+        .unwrap();
+    let destination = root.path().join("alternate");
+    let engine = Engine::open(cfg).await.unwrap();
+    let prepared = engine
+        .prepare(
+            TorrentInput::from_bytes(fixture.bytes.clone()).unwrap(),
+            vec![fixture.peer],
+        )
+        .await
+        .unwrap();
+    assert!(engine.list().await.unwrap().is_empty());
+    let added = engine
+        .add_prepared(
+            &prepared,
+            vec![0],
+            AddOptions {
+                destination: Some(destination.clone()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    wait_for(&engine, &added.id, TorrentState::Seeding).await;
+    assert_eq!(
+        tokio::fs::read(destination.join("fixture.bin"))
+            .await
+            .unwrap(),
+        fixture.payload
+    );
+    assert_eq!(
+        tokio::fs::read(root.path().join("downloads"))
+            .await
+            .unwrap(),
+        b"unrelated file"
+    );
+    engine.shutdown().await.unwrap();
+    let restored = Engine::open(config(root.path())).await.unwrap();
+    wait_for(&restored, &added.id, TorrentState::Seeding).await;
+    assert_eq!(
+        restored.snapshot(&added.id).await.unwrap().destination,
+        destination
+    );
     restored.shutdown().await.unwrap();
     fixture.session.stop().await;
 }
