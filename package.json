@@ -11,6 +11,8 @@
   "scripts": {
     "desktop:dev": "bun run --cwd apps/desktop tauri dev",
     "desktop:build": "bun run --cwd apps/desktop tauri build --no-bundle",
+    "desktop:package": "bun run scripts/package.mjs",
+    "test:packaging": "node --test scripts/package.test.mjs",
     "check": "bun run --cwd apps/desktop check",
     "test": "bun run --cwd apps/desktop test",
     "build": "bun run --cwd apps/desktop build"
