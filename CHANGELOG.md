@@ -6,6 +6,7 @@
 
 - Make the search-cancellation UI test wait for an explicit cancellation instead of stopping itself during polling.
 - Reduce test-worker CPU contention in native packaging checks while preserving test deadlines and assertions.
+- Wait for the loopback seeder to observe a paused connection closing before testing resume, instead of racing socket teardown.
 - Align website feature text with complete product screenshots on desktop and mobile.
 
 ### Changed

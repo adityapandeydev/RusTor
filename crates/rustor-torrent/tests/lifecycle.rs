@@ -87,6 +87,31 @@ async fn pauses_an_active_transfer_then_resumes_verified_bytes() {
         paused_bytes
     );
     assert!(paused_bytes < fixture.payload.len() as u64);
+    // Native pause cancels locally before the remote sees its socket close.
+    // Let the loopback seeder observe that close before reconnecting, so this
+    // test does not race platform socket teardown and the native peer backoff.
+    timeout(Duration::from_secs(10), async {
+        loop {
+            let disconnected = fixture.session.with_torrents(|torrents| {
+                for (_, torrent) in torrents {
+                    if !torrent
+                        .stats()
+                        .live
+                        .is_some_and(|live| live.snapshot.peer_stats.live == 0)
+                    {
+                        return false;
+                    }
+                }
+                true
+            });
+            if disconnected {
+                break;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("loopback seeder did not observe the paused peer disconnect");
     engine.resume(&added.id).await.unwrap();
     wait_for(&engine, &added.id, TorrentState::Seeding).await;
     assert_eq!(

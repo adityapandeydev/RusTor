@@ -93,7 +93,7 @@ pub fn config(root: &Path) -> EngineConfig {
 }
 
 pub async fn wait_for(engine: &Engine, id: &rustor_torrent::TorrentId, state: TorrentState) {
-    timeout(Duration::from_secs(20), async {
+    let result = timeout(Duration::from_secs(20), async {
         loop {
             let snapshot = engine.snapshot(id).await.unwrap();
             assert_ne!(snapshot.state, TorrentState::Failed, "{:?}", snapshot.error);
@@ -103,6 +103,10 @@ pub async fn wait_for(engine: &Engine, id: &rustor_torrent::TorrentId, state: To
             sleep(Duration::from_millis(20)).await;
         }
     })
-    .await
-    .expect("torrent did not reach expected state");
+    .await;
+    assert!(
+        result.is_ok(),
+        "torrent did not reach expected state {state:?}; last snapshot: {:?}",
+        engine.snapshot(id).await
+    );
 }
