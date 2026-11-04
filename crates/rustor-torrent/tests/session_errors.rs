@@ -33,10 +33,7 @@ async fn rejects_relative_paths_and_preserves_corrupt_state_for_diagnosis() {
     tokio::fs::create_dir_all(&cfg.state_dir).await.unwrap();
     let path = cfg.state_dir.join("session.json");
     tokio::fs::write(&path, b"not JSON").await.unwrap();
-    assert!(matches!(
-        Engine::open(cfg).await,
-        Err(Error::Backend { .. })
-    ));
+    assert!(matches!(Engine::open(cfg).await, Err(Error::RestoreFailed)));
     assert_eq!(tokio::fs::read(path).await.unwrap(), b"not JSON");
 }
 

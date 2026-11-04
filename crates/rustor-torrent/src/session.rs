@@ -1,9 +1,10 @@
 use std::{
+    collections::BTreeMap,
     net::SocketAddr,
     num::{NonZeroU32, NonZeroUsize},
     path::PathBuf,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -16,7 +17,7 @@ use librqbit::{
 };
 use serde::Serialize;
 use tokio::{
-    sync::{Mutex, RwLock},
+    sync::{Mutex, OwnedMutexGuard, RwLock},
     time::timeout,
 };
 
@@ -149,6 +150,8 @@ pub struct Engine {
     discovery: bool,
     next_native_id: AtomicUsize,
     download_dir: PathBuf,
+    persistence: crate::persistence::Persistence,
+    torrent_operations: Mutex<BTreeMap<TorrentId, Weak<Mutex<()>>>>,
 }
 
 struct ActiveSession {
@@ -194,6 +197,8 @@ impl Engine {
             Err(std::fs::TryLockError::WouldBlock) => return Err(Error::StateInUse),
             Err(error) => return Err(backend("lock session directory", error)),
         }
+        let persistence = crate::persistence::Persistence::new(config.state_dir.clone());
+        let saved = persistence.preflight().await?;
         let options = SessionOptions {
             listen: config.discovery.then(ListenerOptions::default),
             dht: config.discovery.then(|| DhtSessionConfig {
@@ -205,7 +210,9 @@ impl Engine {
             persistence: Some(SessionPersistenceConfig::Json {
                 folder: Some(config.state_dir),
             }),
-            fastresume: true,
+            // Recheck payload hashes after restart instead of trusting a bitfield
+            // that may have been interrupted alongside the last disk write.
+            fastresume: false,
             concurrent_init_limit: Some(config.max_initializations.get()),
             peer_limit: Some(config.peer_limit.get()),
             ratelimits: LimitsConfig {
@@ -219,6 +226,10 @@ impl Engine {
         let session = Session::new_with_opts(config.download_dir, options)
             .await
             .map_err(|e| backend("open torrent session", e))?;
+        if let Err(error) = saved.verify_restored(&session) {
+            session.stop().await;
+            return Err(error);
+        }
         let next_native_id = session
             .with_torrents(|torrents| {
                 torrents
@@ -237,7 +248,24 @@ impl Engine {
             discovery: config.discovery,
             next_native_id: AtomicUsize::new(next_native_id),
             download_dir,
+            persistence,
+            torrent_operations: Mutex::new(BTreeMap::new()),
         })
+    }
+
+    async fn lock_torrent(&self, id: &TorrentId) -> OwnedMutexGuard<()> {
+        let gate = {
+            let mut gates = self.torrent_operations.lock().await;
+            gates.retain(|_, gate| gate.strong_count() > 0);
+            if let Some(gate) = gates.get(id).and_then(Weak::upgrade) {
+                gate
+            } else {
+                let gate = Arc::new(Mutex::new(()));
+                gates.insert(id.clone(), Arc::downgrade(&gate));
+                gate
+            }
+        };
+        gate.lock_owned().await
     }
 
     pub async fn prepare(
@@ -376,6 +404,7 @@ impl Engine {
         options: AddOptions,
         only_files: Option<Vec<usize>>,
     ) -> Result<AddOutcome, Error> {
+        let _operation = self.lock_torrent(input.id()).await;
         let destination = options
             .destination
             .map(|path| {
@@ -435,6 +464,21 @@ impl Engine {
                 "engine returned a different torrent identity",
             ));
         }
+        let persisted = async {
+            self.persistence.verify_present(&handle).await?;
+            self.persistence.verify_metainfo(&id).await
+        }
+        .await;
+        if let Err(error) = persisted {
+            if !already_managed {
+                // A failed add must not silently keep downloading. Keep any
+                // payload bytes while asking the native owner to forget it.
+                let _ = session
+                    .delete(TorrentIdOrHash::Id(handle.id()), false)
+                    .await;
+            }
+            return Err(error);
+        }
         Ok(AddOutcome {
             id,
             already_managed,
@@ -481,35 +525,40 @@ impl Engine {
     }
 
     pub async fn pause(&self, id: &TorrentId) -> Result<(), Error> {
+        let _operation = self.lock_torrent(id).await;
         let _control = self.controls.lock().await;
         let guard = self.session.read().await;
         let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
         let handle = handle(session, id)?;
         if handle.is_paused() {
-            return Ok(());
+            return self.persistence.verify_present(&handle).await;
         }
         session
             .pause(&handle)
             .await
-            .map_err(|e| backend("pause torrent", e))
+            .map_err(|e| backend("pause torrent", e))?;
+        self.persistence.verify_present(&handle).await
     }
 
     pub async fn resume(&self, id: &TorrentId) -> Result<(), Error> {
+        let _operation = self.lock_torrent(id).await;
         let _control = self.controls.lock().await;
         let guard = self.session.read().await;
         let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
         let handle = handle(session, id)?;
         if !handle.is_paused() {
-            return Ok(());
+            return self.persistence.verify_present(&handle).await;
         }
         session
             .unpause(&handle)
             .await
-            .map_err(|e| backend("resume torrent", e))
+            .map_err(|e| backend("resume torrent", e))?;
+        self.persistence.verify_present(&handle).await
     }
 
     /// Retry only a failed transfer, rechecking its existing data in place.
     pub async fn retry(&self, id: &TorrentId) -> Result<(), Error> {
+        let _operation = self.lock_torrent(id).await;
         let _control = self.controls.lock().await;
         let guard = self.session.read().await;
         let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
@@ -520,11 +569,13 @@ impl Engine {
         session
             .unpause(&torrent)
             .await
-            .map_err(|e| backend("retry torrent", e))
+            .map_err(|e| backend("retry torrent", e))?;
+        self.persistence.verify_present(&torrent).await
     }
 
     /// Stop downloading/seeding and forget the torrent. Payload files are always kept.
     pub async fn remove(&self, id: &TorrentId) -> Result<(), Error> {
+        let _operation = self.lock_torrent(id).await;
         let _control = self.controls.lock().await;
         let guard = self.session.read().await;
         let session = &guard.as_ref().ok_or(Error::Stopped)?.native;
@@ -532,7 +583,8 @@ impl Engine {
         session
             .delete(TorrentIdOrHash::Id(torrent.id()), false)
             .await
-            .map_err(|e| backend("remove torrent", e))
+            .map_err(|e| backend("remove torrent", e))?;
+        self.persistence.verify_removed(id).await
     }
 
     /// Idempotent. Applications must await this before exiting.
