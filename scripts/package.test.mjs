@@ -17,7 +17,7 @@ test("desktop, frontend and workspace versions agree for packaged releases", asy
   assert.equal(/"apps\/desktop":\s*\{\s*"name": "@rustor\/desktop",\s*"version": "([^"]+)"/.exec(bun)?.[1], tauri.version);
   const locked = await readFile(new URL("Cargo.lock", root), "utf8");
   for (const name of ["rustor-desktop", "rustor-search", "rustor-torrent"])
-    assert.equal(new RegExp(`name = "${name}"\\nversion = "([^"]+)"`).exec(locked)?.[1], tauri.version);
+    assert.equal(new RegExp(`name = "${name}"\\r?\\nversion = "([^"]+)"`).exec(locked)?.[1], tauri.version);
 });
 
 test("supported native targets select installer formats and reject unknown architectures", () => {
