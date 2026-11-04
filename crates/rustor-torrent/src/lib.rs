@@ -1,6 +1,7 @@
 //! Native torrent lifecycle for RusTor. No desktop or terminal UI dependencies.
 
 mod input;
+mod persistence;
 mod retry_storage;
 mod session;
 
@@ -24,6 +25,10 @@ pub enum Error {
     StateInUse,
     #[error("Torrent metadata resolution timed out")]
     MetadataTimeout,
+    #[error("The active change could not be confirmed in the saved session")]
+    SessionNotSaved,
+    #[error("The saved torrent session could not be restored completely")]
+    RestoreFailed,
     #[error("{operation} failed: {message}")]
     Backend {
         operation: &'static str,

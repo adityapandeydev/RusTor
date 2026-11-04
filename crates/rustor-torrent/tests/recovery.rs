@@ -44,6 +44,20 @@ async fn wait_for_exit(worker: &mut Worker) {
     }
 }
 
+async fn kill_at_checkpoint(worker: &mut Worker, root: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !root.join("ready").exists() {
+        assert!(
+            worker.0.try_wait().unwrap().is_none(),
+            "worker exited before checkpoint"
+        );
+        assert!(Instant::now() < deadline, "worker did not reach checkpoint");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    worker.0.kill().unwrap();
+    worker.0.wait().unwrap();
+}
+
 async fn roundtrip(crash: bool) {
     let fixture = Fixture::new().await;
     let root = TempDir::new().unwrap();
@@ -53,17 +67,7 @@ async fn roundtrip(crash: bool) {
     let peer = fixture.peer.to_string();
     let mut prepare = spawn_worker(root.path(), if crash { "crash" } else { "prepare" }, &peer);
     if crash {
-        let deadline = Instant::now() + Duration::from_secs(20);
-        while !root.path().join("ready").exists() {
-            assert!(
-                prepare.0.try_wait().unwrap().is_none(),
-                "worker exited before checkpoint"
-            );
-            assert!(Instant::now() < deadline, "worker did not reach checkpoint");
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        prepare.0.kill().unwrap();
-        prepare.0.wait().unwrap();
+        kill_at_checkpoint(&mut prepare, root.path()).await;
     } else {
         wait_for_exit(&mut prepare).await;
     }
@@ -96,6 +100,33 @@ async fn completed_active_session_survives_forced_process_termination() {
     roundtrip(true).await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn partial_progress_and_bytes_survive_forced_process_termination() {
+    let fixture = Fixture::new().await;
+    let root = TempDir::new().unwrap();
+    tokio::fs::write(root.path().join("input.torrent"), &fixture.bytes)
+        .await
+        .unwrap();
+    let mut worker = spawn_worker(root.path(), "partial", &fixture.peer.to_string());
+    kill_at_checkpoint(&mut worker, root.path()).await;
+    let payload = root.path().join("downloads/fixture.bin");
+    let before = tokio::fs::read(&payload).await.unwrap();
+    let mut verify = spawn_worker(root.path(), "verify_partial", "");
+    wait_for_exit(&mut verify).await;
+    assert_eq!(tokio::fs::read(&payload).await.unwrap(), before);
+    assert!(
+        before
+            .chunks(16 * 1024)
+            .zip(fixture.payload.chunks(16 * 1024))
+            .any(|(a, b)| a == b)
+    );
+    assert_ne!(
+        before, fixture.payload,
+        "worker was killed only after completing"
+    );
+    fixture.session.stop().await;
+}
+
 // Runs in an isolated OS process, not as a normal test in the parent harness.
 #[test]
 #[ignore = "subprocess helper invoked by the recovery tests"]
@@ -107,8 +138,12 @@ fn recovery_worker() {
             TorrentInput::from_bytes(tokio::fs::read(root.join("input.torrent")).await.unwrap())
                 .unwrap();
         let id = input.id().clone();
-        let engine = Engine::open(config(&root)).await.unwrap();
-        if phase == "prepare" || phase == "crash" {
+        let mut cfg = config(&root);
+        if phase == "partial" {
+            cfg.download_limit_bps = std::num::NonZeroU32::new(16 * 1024);
+        }
+        let engine = Engine::open(cfg).await.unwrap();
+        if phase == "prepare" || phase == "crash" || phase == "partial" {
             let peer = std::env::var("RUSTOR_TEST_PEER").unwrap().parse().unwrap();
             engine
                 .add(
@@ -120,6 +155,30 @@ fn recovery_worker() {
                 )
                 .await
                 .unwrap();
+            if phase == "partial" {
+                let downloaded = tokio::time::timeout(Duration::from_secs(10), async {
+                    loop {
+                        let snapshot = engine.snapshot(&id).await.unwrap();
+                        assert_ne!(snapshot.state, TorrentState::Failed, "{:?}", snapshot.error);
+                        if snapshot.state == TorrentState::Downloading
+                            && snapshot.downloaded_bytes > 0
+                        {
+                            assert!(snapshot.downloaded_bytes < snapshot.total_bytes);
+                            return snapshot.downloaded_bytes;
+                        }
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .unwrap();
+                tokio::fs::write(root.join("ready.tmp"), downloaded.to_be_bytes())
+                    .await
+                    .unwrap();
+                tokio::fs::rename(root.join("ready.tmp"), root.join("ready"))
+                    .await
+                    .unwrap();
+                std::future::pending::<()>().await;
+            }
             wait_for(&engine, &id, TorrentState::Seeding).await;
             if phase == "prepare" {
                 engine.pause(&id).await.unwrap();
@@ -132,14 +191,29 @@ fn recovery_worker() {
             }
         } else {
             assert_eq!(engine.list().await.unwrap().len(), 1);
-            let expected = if phase == "verify_paused" {
+            let expected = if phase == "verify_partial" {
+                TorrentState::Downloading
+            } else if phase == "verify_paused" {
                 TorrentState::Paused
             } else {
                 TorrentState::Seeding
             };
             wait_for(&engine, &id, expected).await;
             let snapshot = engine.snapshot(&id).await.unwrap();
-            assert_eq!(snapshot.downloaded_bytes, snapshot.total_bytes);
+            if phase == "verify_partial" {
+                let checkpoint = u64::from_be_bytes(
+                    tokio::fs::read(root.join("ready"))
+                        .await
+                        .unwrap()
+                        .try_into()
+                        .unwrap(),
+                );
+                assert!(checkpoint > 0);
+                assert!(snapshot.downloaded_bytes >= checkpoint);
+                assert!(snapshot.downloaded_bytes < snapshot.total_bytes);
+            } else {
+                assert_eq!(snapshot.downloaded_bytes, snapshot.total_bytes);
+            }
             assert!(snapshot.total_bytes > 0);
         }
         engine.shutdown().await.unwrap();

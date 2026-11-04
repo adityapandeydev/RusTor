@@ -47,6 +47,14 @@ impl From<rustor_torrent::Error> for CommandError {
             ),
             Error::NotFound => Self::new("not_found", "This torrent is no longer in the session."),
             Error::Stopped => Self::new("stopped", "RusTor is shutting down."),
+            Error::SessionNotSaved => Self::new(
+                "session_not_saved",
+                "The active torrent may have changed, but its session could not be saved. Check free space and permissions in RusTor's application-data folder. A removed torrent may return, or its pause state may change, after restarting.",
+            ),
+            Error::RestoreFailed => Self::new(
+                "session_restore_failed",
+                "The saved torrent session could not be restored completely. Close RusTor and check its application-data engine folder, free space, permissions and saved .torrent files. Keep the saved session and payload files for recovery.",
+            ),
             Error::StateInUse => Self::new(
                 "state_in_use",
                 "Another RusTor process is using this session. Close it and restart RusTor.",
@@ -454,6 +462,21 @@ impl DesktopState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_errors_explain_active_state_and_preserve_recovery_guidance() {
+        let error = CommandError::from(rustor_torrent::Error::SessionNotSaved);
+        assert_eq!(error.code, "session_not_saved");
+        assert!(error.message.contains("may have changed"));
+        assert!(error.message.contains("removed torrent may return"));
+        let error = CommandError::from(rustor_torrent::Error::RestoreFailed);
+        assert_eq!(error.code, "session_restore_failed");
+        assert!(
+            error
+                .message
+                .contains("Keep the saved session and payload files")
+        );
+    }
 
     #[test]
     fn selections_are_scoped_bounded_and_do_not_accept_paths_as_ids() {
