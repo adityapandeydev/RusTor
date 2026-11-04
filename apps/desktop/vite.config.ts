@@ -7,5 +7,10 @@ export default defineConfig({
   clearScreen: false,
   build: { license: { fileName: "licenses.json" } },
   server: { watch: { ignored: ["**/src-tauri/**"] } },
-  test: { environment: "jsdom", restoreMocks: true },
+  test: {
+    environment: "jsdom",
+    restoreMocks: true,
+    // Keep independent jsdom workers from competing for constrained CI CPUs.
+    fileParallelism: false,
+  },
 });

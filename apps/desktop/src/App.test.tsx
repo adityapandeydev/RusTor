@@ -75,25 +75,25 @@ describe("Downloads desktop flow", () => {
       label: "D:/Selected",
     });
     render(<App api={service} />);
-    await userEvent.click(
+    await user.click(
       await screen.findByRole("button", { name: "Add torrent" }),
     );
     await user.click(screen.getByLabelText("Magnet link or infohash"));
     await user.paste("magnet:?xt=urn:btih:test");
-    await userEvent.click(
+    await user.click(
       screen.getByRole("button", { name: "Choose folder" }),
     );
-    await userEvent.click(
+    await user.click(
       screen.getByRole("button", { name: "Load file list" }),
     );
-    await screen.findByRole("checkbox", { name: "extra.bin" });
+    await screen.findByLabelText("extra.bin");
     expect(service.prepare).toHaveBeenCalledWith({
       kind: "magnet",
       value: "magnet:?xt=urn:btih:test",
     });
     expect(service.add).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("checkbox", { name: "extra.bin" }));
-    await userEvent.click(
+    await user.click(screen.getByLabelText("extra.bin"));
+    await user.click(
       screen.getByRole("button", { name: "Start download" }),
     );
     await waitFor(() =>

@@ -29,7 +29,7 @@ it("keeps selections across pages and search while rendering at most 100 checkbo
   render(<Harness />);
   expect(screen.getAllByRole("checkbox")).toHaveLength(100);
   await user.click(screen.getByLabelText("folder/file-0.bin"));
-  await userEvent.click(screen.getByRole("button", { name: "Next files" }));
+  await user.click(screen.getByRole("button", { name: "Next files" }));
   expect(
     screen.getByLabelText("folder/file-100.bin"),
   ).toHaveProperty("checked", true);
@@ -39,11 +39,11 @@ it("keeps selections across pages and search while rendering at most 100 checkbo
   expect(
     screen.getByLabelText("folder/file-0.bin"),
   ).toHaveProperty("checked", false);
-  await userEvent.click(
+  await user.click(
     screen.getByRole("button", { name: "Clear selection" }),
   );
   expect(screen.getByText(/0 of 205 selected/)).toBeDefined();
-  await userEvent.click(
+  await user.click(
     screen.getByRole("button", { name: "Select all files" }),
   );
   expect(screen.getByText(/205 of 205 selected/)).toBeDefined();

@@ -148,11 +148,24 @@ describe("Discover", () => {
     expect(api.start).toHaveBeenCalledTimes(2);
   });
   it("stops a running search and keeps partial results", async () => {
+    let cancelled = false;
     const { api } = setup(
-      { snapshot: vi.fn().mockResolvedValue({ ...done, phase: "cancelled" }) },
+      {
+        cancel: vi.fn(async () => {
+          cancelled = true;
+          return true;
+        }),
+        snapshot: vi.fn(async (): Promise<SearchSnapshot> => ({
+          ...done,
+          phase: cancelled ? "cancelled" : "running",
+        })),
+      },
       { ...done, phase: "running" },
     );
     await submit();
+    // A user may read the partial results before pressing Stop.
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledWith(1));
+    expect(api.cancel).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Stop search" }));
     expect(api.cancel).toHaveBeenCalledWith(1);
     await screen.findByText("Search stopped");
