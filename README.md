@@ -81,6 +81,8 @@ The header's Download settings control saves a default download folder and sessi
 
 Preferences use a versioned, size-bounded `settings.json` in the application-data engine folder. Saves replace the file atomically after flushing the temporary file. A failed save leaves active preferences unchanged. Malformed or unsupported saved settings are preserved and reported at startup rather than silently reset; repair or remove that file while the app is closed to recover. Power-loss durability and network-drive behavior have not been validated.
 
+Startup opens the session-data folder without creating payload storage. Download folders are opened when a transfer starts, so an unavailable default folder does not block metadata previews, downloads to another selected folder, or restoration of transfers at other destinations. Initial speed limits use the same bounds as settings changes. Closing before startup begins prevents the engine from opening a new session.
+
 Install Bun 1.3.5, a current Node.js development runtime compatible with Vite, Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/). Windows needs the Microsoft C++ build tools and WebView2. Node.js and Bun are development tools and are not bundled as application runtimes.
 
 ```sh

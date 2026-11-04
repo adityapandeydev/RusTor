@@ -215,6 +215,11 @@ impl DesktopState {
     pub async fn initialize(&self) {
         self.engine
             .get_or_init(|| async {
+                // shutdown also awaits this cell to drain an in-flight startup.
+                // If startup has not begun, it must not open a new session.
+                if self.stopping.load(Ordering::Acquire) {
+                    return Err(CommandError::new("stopped", "RusTor is shutting down."));
+                }
                 let mut config = self
                     .config
                     .lock()
@@ -474,6 +479,20 @@ mod tests {
         let snapshot = state.snapshot().await;
         assert!(matches!(snapshot.phase, EnginePhase::Failed));
         assert!(snapshot.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn closing_before_startup_does_not_open_a_session_or_create_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let mut config =
+            EngineConfig::new(root.path().join("downloads"), root.path().join("state"));
+        config.discovery = false;
+        let state = DesktopState::new(config);
+        state.shutdown().await;
+        state.initialize().await;
+        assert!(!root.path().join("state").exists());
+        assert!(!root.path().join("downloads").exists());
+        assert_eq!(state.engine().err().unwrap().code, "stopped");
     }
 
     #[tokio::test]
