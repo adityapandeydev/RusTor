@@ -33,7 +33,7 @@ run(["cargo", "audit", "--file", join(root, "Cargo.lock")]);
 run(["bun", "audit"]);
 run(["bun", "run", "build"]);
 const rustReport = join(resources, "rust-licenses.json");
-run(["cargo", "about", "generate", "--workspace", "--locked", "--fail", "--format", "json", "--output-file", rustReport]);
+run(["cargo", "about", "generate", "--workspace", "--all-features", "--locked", "--fail", "--format", "json", "--output-file", rustReport]);
 const rust = JSON.parse(await readFile(rustReport, "utf8"));
 const frontend = JSON.parse(await readFile(join(root, "apps/desktop/dist/licenses.json"), "utf8"));
 // Keep the bundler source on the project's volume: Windows resource globbing
