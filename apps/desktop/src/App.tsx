@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { desktop, errorMessage } from "./bridge";
+import { version } from "../package.json";
 import type {
   DesktopApi,
   PreparedSelection,
@@ -692,7 +693,7 @@ export default function App({
         </div>
         <footer className="page-footer">
           <span>
-            RusTor <span className="version">0.1.0</span>
+            RusTor <span className="version">{version}</span>
           </span>
         </footer>
       </main>
