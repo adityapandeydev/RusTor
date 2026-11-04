@@ -146,4 +146,6 @@ SOFTWARE.
 
 The native protocol implementation is provided by [librqbit / rqbit](https://github.com/ikatson/rqbit), developed by Igor Katson and contributors and licensed under Apache-2.0. Our local transfer tests draw on its public API examples and testing approach. RusTor does not claim authorship of that protocol implementation.
 
+The µTP dependency uses the upstream [librqbit-utp security fix](https://github.com/ikatson/librqbit-utp/commit/f119a999657d66fe2c2322613428241ce8a69f23), pinned until a fixed crate release is available. It replaces the affected ringbuf dependency with a fixed version for RUSTSEC-2026-0293. The transport source remains upstream's Apache-2.0 implementation.
+
 RusTor's original code is licensed under the [MIT License](LICENSE). Third-party dependencies retain their own licenses; release packaging must include their applicable notices.

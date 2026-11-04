@@ -15,3 +15,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net"] }
 tempfile = "3"
 url = "2"
+
+# Upstream fix for RUSTSEC-2026-0293 until librqbit-utp publishes a fixed release.
+[patch.crates-io]
+librqbit-utp = { git = "https://github.com/ikatson/librqbit-utp", rev = "f119a999657d66fe2c2322613428241ce8a69f23" }
