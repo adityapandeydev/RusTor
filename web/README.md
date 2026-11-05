@@ -1,32 +1,23 @@
 # RusTor website
 
-One page, plain HTML/CSS/JavaScript, with no browser runtime dependencies or TypeScript. Product screenshots use the current app components with disclosed example transfers. Font license and image origins are in `assets/`.
+React JSX, Bun, Vite and Tailwind CSS v4. This workspace builds the GitHub Pages website; it does not change or build the desktop app.
 
-## Preview locally
-
-Requires Node.js 24 and internet access to read public GitHub release metadata:
+From the repository root:
 
 ```sh
-node web/build.mjs --serve
+bun install --frozen-lockfile
+bun run web:dev
+bun run web:test
+bun run web:build
+bun run --cwd web preview
 ```
 
-Open http://127.0.0.1:4175. Build output goes into a fresh system temporary directory, outside the repository. To choose another output directory:
+The dev server serves the JSX directly. The release build fetches all public GitHub releases, compiles through Vite, and pre-renders the same React components into `web/dist/`. React hydrates that markup in the browser. The page and GitHub download fallbacks remain available without JavaScript. To build into a separate directory, use `bun run web:build --out /absolute/output/path`.
 
-```sh
-node web/build.mjs --out /path/outside/the/repository
-```
+`src/App.jsx` contains the page and selection state; `src/Downloads.jsx` contains download links and the release archive; `src/motion.js` preserves the existing animations and reduced-motion handling. Tailwind v4 is configured in `src/styles.css` and `vite.config.js`. Preflight is intentionally omitted to preserve the established browser defaults and exact visual design. The remaining custom CSS holds the original responsive geometry and authored motion.
 
-## Check
+`public/assets/` contains the unchanged product captures, font and logo. `release-feed.mjs` is build-only GitHub access; `releases.mjs` validates public metadata and selects platform packages. `GITHUB_TOKEN`, when provided in CI, stays on the build side and is never bundled.
 
-```sh
-node --test web/tests/*.test.mjs
-node --check web/site.mjs
-```
+The Pages workflow deploys on website changes, public release events, manual dispatch and its existing schedule. Relative Vite asset paths support the `/RusTor/` project URL. Do not commit generated `dist/` output.
 
-## Publish
-
-GitHub Pages must use **GitHub Actions** as its build source. Merging changes to `web/` or its workflow into main deploys the site. Publishing, editing, unpublishing or deleting a release also refreshes the site; a daily refresh covers asset changes. Manual refresh is available through Actions → Website → Run workflow on main.
-
-The build reads every page of GitHub releases and exports only published releases and uploaded assets from this repository. It keeps preview/stable status and explicit Mac architecture choices. Drafts, API credentials, source code, tests, build scripts and internal documents are not copied into the published site. The build token is used only on the runner; the browser reads a static, public `releases.json` from the same site. Rendering uses DOM text nodes, not release-provided HTML.
-
-Downloads stay on GitHub Releases. A visitor without JavaScript, or whose release data fails to load, can still reach the release page using the static fallback links. No analytics, forms, cookies or remote font service are included.
+Product captures use disclosed example transfers; their origins and the font license are preserved in `public/assets/`. The feed retains explicit preview/stable and Mac architecture choices. Release titles render as React text, never as release-provided HTML. Drafts, credentials, source, tests, build scripts and internal documents are not published. No analytics, forms, cookies or remote font service are added.

@@ -15,82 +15,10 @@
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
   <link rel="preload" href="./assets/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="./styles.css">
   <noscript><style>.theme-switch,.platform-picker,.architecture-picker,.motion-control{display:none!important}</style></noscript>
-  <script type="module" src="./site.mjs"></script>
+  <script type="module" src="/src/main.jsx"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header frame">
-    <a class="wordmark" href="./" aria-label="RusTor home"><img src="./assets/mark.svg" width="40" height="40" alt="">RusTor</a>
-    <nav aria-label="Main navigation"><a href="#experience">The app</a><a href="#releases">Releases</a><a class="source-link" href="https://github.com/adityapandeydev/RusTor">Source code <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a></nav>
-  </header>
-  <main id="main">
-    <section class="hero frame" aria-labelledby="hero-title">
-      <div class="hero-copy">
-        <h1 id="hero-title" class="heading-1">Good things.<br>Piece by piece.</h1>
-        <p class="hero-description body-1">A torrent client built with Rust. Search, choose your files, and keep every transfer in view.</p>
-        <a class="button download-button" id="hero-download" href="#downloads"><span data-download-label>Download RusTor</span><span class="button-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v14m-6-6 6 6 6-6M5 21h14"/></svg></span></a>
-        <p class="caption hero-proof">Free &amp; open source.<span>Windows · Linux · macOS</span></p>
-      </div>
-      <div class="transfer-art" aria-hidden="true">
-        <svg class="assembly" viewBox="0 0 480 480" fill="none">
-          <path class="route" d="M32 72h80c48 0 48 112 96 112h32M448 112h-72c-48 0-48 72-88 72h-48M16 360h80c56 0 56-72 104-72h40M464 384h-72c-48 0-48-96-104-96h-48"/>
-          <g class="arrow-tiles" fill="currentColor">
-            <rect x="205" y="96" width="30" height="30" style="--x:-130px;--y:-90px;--i:0"/><rect x="245" y="96" width="30" height="30" style="--x:150px;--y:-70px;--i:1"/>
-            <rect x="205" y="136" width="30" height="30" style="--x:-140px;--y:-10px;--i:2"/><rect x="245" y="136" width="30" height="30" style="--x:120px;--y:-40px;--i:3"/>
-            <rect x="205" y="176" width="30" height="30" style="--x:-150px;--y:60px;--i:4"/><rect x="245" y="176" width="30" height="30" style="--x:150px;--y:30px;--i:5"/>
-            <rect x="125" y="216" width="30" height="30" style="--x:-70px;--y:100px;--i:6"/><rect x="165" y="216" width="30" height="30" style="--x:-90px;--y:-150px;--i:7"/>
-            <rect x="205" y="216" width="30" height="30" style="--x:-90px;--y:100px;--i:8"/><rect x="245" y="216" width="30" height="30" style="--x:100px;--y:-140px;--i:9"/>
-            <rect x="285" y="216" width="30" height="30" style="--x:70px;--y:100px;--i:10"/><rect x="325" y="216" width="30" height="30" style="--x:80px;--y:50px;--i:11"/>
-            <rect x="165" y="256" width="30" height="30" style="--x:-100px;--y:80px;--i:12"/><rect x="205" y="256" width="30" height="30" style="--x:-90px;--y:120px;--i:13"/>
-            <rect x="245" y="256" width="30" height="30" style="--x:110px;--y:70px;--i:14"/><rect x="285" y="256" width="30" height="30" style="--x:90px;--y:100px;--i:15"/>
-            <rect x="205" y="296" width="30" height="30" style="--x:-100px;--y:70px;--i:16"/><rect x="245" y="296" width="30" height="30" style="--x:120px;--y:80px;--i:17"/>
-            <rect x="125" y="376" width="30" height="10" style="--x:-90px;--y:20px;--i:18"/><rect x="165" y="376" width="30" height="10" style="--x:-90px;--y:30px;--i:19"/>
-            <rect x="205" y="376" width="30" height="10" style="--x:-80px;--y:30px;--i:20"/><rect x="245" y="376" width="30" height="10" style="--x:80px;--y:30px;--i:21"/>
-            <rect x="285" y="376" width="30" height="10" style="--x:90px;--y:30px;--i:22"/><rect x="325" y="376" width="30" height="10" style="--x:90px;--y:20px;--i:23"/>
-          </g>
-          <g class="loose-tiles" fill="currentColor"><rect x="64" y="56" width="10" height="10"/><rect x="401" y="88" width="10" height="10"/><rect x="48" y="339" width="10" height="10"/><rect x="416" y="360" width="10" height="10"/></g>
-        </svg>
-      </div>
-      <div class="hero-bottom"><a href="#experience">Take a closer look <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></a><button type="button" class="motion-control" id="replay-motion" aria-label="Replay the piece assembly animation">Replay animation <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg></button></div>
-    </section>
-    <section class="showcase pearl" id="experience" aria-labelledby="experience-title">
-      <div class="frame section-space">
-        <div class="section-heading"><h2 class="heading-2" id="experience-title" data-reveal>Everything in motion.<br>In one place.</h2><div class="showcase-intro"><p class="body-1">A clear view of what’s downloading, what’s seeding, and what’s next.</p><div class="theme-switch" role="group" aria-label="Preview app appearance"><button type="button" data-theme="dark" aria-pressed="true">Dark</button><button type="button" data-theme="light" aria-pressed="false">Light</button></div></div></div>
-        <figure class="product-view" data-reveal><img id="hero-screen" src="./assets/downloads.jpg" alt="RusTor Downloads in dark mode showing illustrative downloading, seeding and paused transfers" width="1240" height="780" loading="lazy"><figcaption class="caption">The real RusTor interface. Example transfers shown.</figcaption></figure>
-      </div>
-    </section>
-    <section class="control-section pearl" aria-labelledby="control-title">
-      <div class="frame section-space">
-        <div class="control-statement"><h2 id="control-title" class="heading-1"><span data-word>Your</span> <span data-word>files.</span><br><span data-word>Your</span> <span data-word>call.</span></h2><p class="body-1">Choose what comes in.<br>Decide how it gets there.</p></div>
-        <article class="feature-row"><div class="feature-copy" data-reveal><h3 class="heading-3">Leave the rest behind.</h3><p>Open a magnet or torrent and choose the files you actually want. Pick a folder before your download begins.</p><p class="feature-aside caption">A whole torrent. Or just your part of it.</p></div><figure class="feature-image" data-reveal><img src="./assets/files.jpg" alt="RusTor file selection panel with individual files, sizes, folder selection and the Start download button" width="942" height="619" loading="lazy"></figure></article>
-        <article class="feature-row feature-reverse"><div class="feature-copy" data-reveal><h3 class="heading-3">You set the pace.</h3><p>Limit upload and download speeds. Pause, resume, or stop a torrent while keeping your files. Reopen the app and pick up your saved session.</p><p class="feature-aside caption">Your bandwidth. Your schedule.</p></div><figure class="feature-image" data-reveal><img src="./assets/settings.jpg" alt="RusTor download settings with a default folder and upload and download speed limits" width="952" height="396" loading="lazy"></figure></article>
-        <div class="discover-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m16 8-3 5-5 3 3-5Z"/></svg><p>Start in Discover. Search Movies, TV, Games and Anime, then bring your selection straight into Downloads.</p></div>
-      </div>
-    </section>
-    <section class="downloads" id="downloads" aria-labelledby="downloads-title"><div class="frame section-space download-layout">
-      <div class="download-intro"><h2 class="heading-2" id="downloads-title" data-reveal>A new home for<br>your downloads.</h2><p class="body-1">Pick your system.<br>We’ll take it from here.</p><p class="caption release-label" id="current-release" aria-live="polite">See the available version on GitHub.</p><a class="text-link caption" href="#releases">Looking for an older version?</a></div>
-      <div class="download-picker" data-reveal>
-        <div class="platform-picker" role="group" aria-label="Choose your operating system"><button type="button" data-platform="windows" aria-pressed="true">Windows</button><button type="button" data-platform="linux" aria-pressed="false">Linux</button><button type="button" data-platform="mac" aria-pressed="false">macOS</button></div>
-        <div class="architecture-picker" role="group" aria-label="Choose your Mac processor" hidden><button type="button" data-architecture="mac-arm" aria-pressed="true">Apple Silicon</button><button type="button" data-architecture="mac-intel" aria-pressed="false">Intel</button></div>
-        <p id="platform-description">Choose a package for your system from GitHub Releases.</p>
-        <div id="package-links" class="package-links" aria-live="polite"><a class="button download-button" href="https://github.com/adityapandeydev/RusTor/releases"><span>Choose a release on GitHub</span><span class="button-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></a></div>
-        <p class="caption picker-note">Preview packages are unsigned. Windows and macOS may show a security warning. Linux and macOS desktop checks are still in progress.</p><p class="caption" id="download-status" role="status"></p><noscript><p>Get all installers from <a href="https://github.com/adityapandeydev/RusTor/releases">GitHub Releases</a>.</p></noscript>
-      </div>
-    </div></section>
-    <section class="releases pearl" id="releases" aria-labelledby="releases-title"><div class="frame section-space archive-layout"><div class="archive-intro"><h2 class="heading-2" id="releases-title" data-reveal>Every version<br>has a place.</h2><p>What’s new, what changed, and the version you came for. All public releases, together.</p><a class="text-link caption" href="https://github.com/adityapandeydev/RusTor/releases">View on GitHub</a></div><div class="archive-content"><div id="release-list" class="release-list" aria-live="polite"><p><a href="https://github.com/adityapandeydev/RusTor/releases">Browse all releases on GitHub</a></p></div><button class="button secondary-button more-releases" type="button" id="more-releases" hidden>Show older releases</button></div></div></section>
-    <section class="questions pearl" aria-labelledby="questions-title"><div class="frame section-space faq-layout"><h2 class="heading-2" id="questions-title" data-reveal>Before you<br>get going.</h2><div class="faq-grid">
-      <details><summary>Is RusTor free?</summary><p>Yes. RusTor’s original code is open source under the MIT License. You can use it, read the code, and contribute on GitHub.</p></details>
-      <details><summary>What systems can I use?</summary><p>Preview packages are available for Windows x64, Linux x64, and Macs with Apple Silicon or Intel processors. Linux and macOS installation and desktop behavior are not yet fully validated.</p></details>
-      <details><summary>What happens when I stop a torrent?</summary><p>The × control stops downloading or seeding and removes the torrent from your saved session. Complete and partial files remain on disk.</p></details>
-      <details><summary>Will my downloads survive a restart?</summary><p>RusTor saves your torrents, destinations and file selections. When you reopen it, it restores the session and checks existing data before continuing. Large downloads may take a while to recheck.</p></details>
-      <details><summary>Does it run when I close the app?</summary><p>No. Closing RusTor stops downloading and seeding. There is no background tray service.</p></details>
-      <details><summary>Why might my computer show a warning?</summary><p>These preview builds are unsigned, and macOS notarization is not configured. Check the release notes and SHA256SUMS before installing. Download only from this project’s GitHub releases.</p></details>
-      <details><summary>Does RusTor hide my IP address?</summary><p>No. BitTorrent peers can see your IP address. RusTor does not include a VPN or anonymous routing. Share only content you have permission to distribute.</p></details>
-      <details><summary>Where does the search come from?</summary><p>RusTor’s search behavior draws on Torlink. Results depend on external source availability; metadata can be missing or up to five minutes old. Torrents using only BitTorrent v2 are currently unsupported.</p></details>
-    </div></div></section>
-  </main>
-  <footer class="site-footer"><div class="frame"><div class="footer-top"><a class="footer-name" href="#main">RusTor<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a><p>Made by <a href="https://github.com/adityapandeydev">Aditya Pandey</a>.<br>Piece by piece.</p></div><div class="footer-bottom"><span>© <span id="year">2026</span> RusTor</span><nav aria-label="Footer navigation"><a href="https://github.com/adityapandeydev/RusTor">Source code</a><a href="https://github.com/adityapandeydev/RusTor/issues">Report a bug</a><a href="https://github.com/adityapandeydev/RusTor/blob/main/LICENSE">MIT License</a><a href="https://github.com/baairon/torlink">Torlink</a></nav></div><p class="caption footer-privacy">No analytics, cookies or forms on this site. GitHub hosts the site and downloads. Product views show illustrative transfers.</p></div></footer>
+  <div id="root"><!--app-html--></div>
 </body>
 </html>

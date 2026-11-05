@@ -3,7 +3,8 @@
   "private": true,
   "packageManager": "bun@1.3.5",
   "workspaces": [
-    "apps/desktop"
+    "apps/desktop",
+    "web"
   ],
   "overrides": {
     "minimatch": "^11.0.1"
@@ -15,6 +16,9 @@
     "test:packaging": "node --test scripts/package.test.mjs",
     "check": "bun run --cwd apps/desktop check",
     "test": "bun run --cwd apps/desktop test",
-    "build": "bun run --cwd apps/desktop build"
+    "build": "bun run --cwd apps/desktop build",
+    "web:dev": "bun run --cwd web dev",
+    "web:build": "bun run --cwd web build",
+    "web:test": "bun run --cwd web test"
   }
 }

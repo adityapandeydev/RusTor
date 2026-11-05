@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fetchReleases } from '../build.mjs';
+import { fetchReleases } from '../release-feed.mjs';
 
 const publicRelease = id => ({ id, name: `Release ${id}`, tag_name: `v${id}`, draft: false, prerelease: false,
   html_url: `https://github.com/adityapandeydev/RusTor/releases/tag/v${id}`, published_at: '2026-11-04T07:00:00Z', assets: [] });

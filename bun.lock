@@ -36,6 +36,23 @@
         "vitest": "^4.0.0",
       },
     },
+    "web": {
+      "name": "@rustor/web",
+      "dependencies": {
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
+      },
+      "devDependencies": {
+        "@tailwindcss/vite": "^4.3.4",
+        "@testing-library/react": "^16.3.0",
+        "@testing-library/user-event": "^14.6.1",
+        "@vitejs/plugin-react": "^5.1.0",
+        "jsdom": "^27.2.0",
+        "tailwindcss": "^4.3.4",
+        "vite": "^8.3.5",
+        "vitest": "^4.0.0",
+      },
+    },
   },
   "overrides": {
     "minimatch": "^11.0.1",
@@ -180,6 +197,8 @@
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.3", "", {}, "sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q=="],
 
     "@rustor/desktop": ["@rustor/desktop@workspace:apps/desktop"],
+
+    "@rustor/web": ["@rustor/web@workspace:web"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
