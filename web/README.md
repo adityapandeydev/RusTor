@@ -21,3 +21,15 @@ The dev server serves the JSX directly. The release build fetches all public Git
 The Pages workflow deploys on website changes, public release events, manual dispatch and its existing schedule. Relative Vite asset paths support the `/RusTor/` project URL. Do not commit generated `dist/` output.
 
 Product captures use disclosed example transfers; their origins and the font license are preserved in `public/assets/`. The feed retains explicit preview/stable and Mac architecture choices. Release titles render as React text, never as release-provided HTML. Drafts, credentials, source, tests, build scripts and internal documents are not published. No analytics, forms, cookies or remote font service are added.
+
+## Search discovery
+
+The build includes canonical and social metadata, `WebSite`, `WebPage` and factual `SoftwareApplication` JSON-LD, and public release data in the pre-rendered HTML. React hydrates the same release snapshot before refreshing the feed. No invented reviews or ratings are added; structured data alone does not qualify the app for Google's software rich results.
+
+The sitemap is `https://adityapandeydev.github.io/RusTor/sitemap.xml`. It lists the one canonical page: section fragments, installers and JSON feeds are not separate pages. No synthetic `lastmod` is emitted on daily rebuilds. A project-level `robots.txt` would be ignored: crawler rules must live at `https://adityapandeydev.github.io/robots.txt`, outside this Pages project.
+
+After non-scheduled production deployments, `indexnow.mjs` verifies the published key file and notifies IndexNow of the canonical page. The public key is scoped to `/RusTor/` through `keyLocation`. HTTP 200 means received; HTTP 202 means key validation is pending. Neither guarantees indexing. Submission failure is visible in the workflow but does not undo a successful site deployment. To retry: `node web/indexnow.mjs`.
+
+For Google Search Console, add the **URL-prefix** property `https://adityapandeydev.github.io/RusTor/`, select **HTML tag**, and place Google's exact verification meta tag in `index.html` inside `<head>`. Alternatively, place the downloaded Google verification HTML file directly in `public/`. Deploy before clicking Verify. Submit `sitemap.xml` in Sitemaps, then inspect the canonical page and request indexing.
+
+For Bing Webmaster Tools, add the same project URL manually and use its HTML meta-tag verification in `index.html` (or the supplied `BingSiteAuth.xml` in `public/`). Deploy, verify, then submit the full sitemap URL. Importing an already verified Search Console property is another option, if you choose to grant Bing that access. Account-specific verification values must come from the owner; placeholders are not deployed.

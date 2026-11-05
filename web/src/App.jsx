@@ -10,9 +10,9 @@ const descriptions = {
   'mac-intel': 'For Macs with an Intel processor. Check About This Mac if you’re unsure.',
 };
 
-export default function App() {
-  const [releases, setReleases] = useState([]);
-  const [status, setStatus] = useState('loading');
+export default function App({ initialReleases = [] }) {
+  const [releases, setReleases] = useState(initialReleases);
+  const [status, setStatus] = useState(initialReleases.length ? 'ready' : 'loading');
   const [platform, setPlatform] = useState('windows');
   const [architecture, setArchitecture] = useState('mac-arm');
   const [theme, setTheme] = useState('dark');

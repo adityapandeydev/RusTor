@@ -119,6 +119,22 @@ it('pre-renders the complete page and hydrates without replacing it or reporting
   container.remove();
 });
 
+it('pre-renders release downloads and hydrates the same snapshot without replacing the page', async () => {
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(<App initialReleases={[release]} />);
+  document.body.append(container);
+  const heading = container.querySelector('h1');
+  expect(container.querySelector('#package-links a').href).toContain('x64-setup.exe');
+  expect(container.querySelector('#release-list').textContent).toContain('RusTor 0.1.2');
+  const onRecoverableError = vi.fn();
+  let root;
+  await act(async () => { root = hydrateRoot(container, <App initialReleases={[release]} />, { onRecoverableError }); });
+  expect(container.querySelector('h1')).toBe(heading);
+  expect(onRecoverableError).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
+  container.remove();
+});
+
 it.each([
   ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows', 'x64-setup.exe'],
   ['Mozilla/5.0 (X11; Linux x86_64)', 'linux', 'amd64.AppImage'],
