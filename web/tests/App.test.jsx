@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
-import { act } from 'react';
 import App from '../src/App.jsx';
 import { normalizeReleases } from '../releases.mjs';
 
@@ -28,6 +27,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it('preserves all platform downloads, hero links, previews and archive controls', async () => {
   render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Windows', exact: true }));
   await screen.findByRole('link', { name: 'Download Windows installer' });
   const hero = () => document.querySelector('#hero-download');
   expect(hero().href).toContain('x64-setup.exe');
@@ -76,6 +76,7 @@ it('preserves five-at-a-time pagination and renders release titles as text', asy
 
 it('loops arrows once without blocking navigation and honors live reduced motion changes', async () => {
   const view = render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Windows', exact: true }));
   await screen.findByRole('link', { name: 'Download Windows installer' });
   const link = document.querySelector('#hero-download');
   // jsdom cannot navigate; platform tests above verify the real package URLs.
@@ -116,4 +117,16 @@ it('pre-renders the complete page and hydrates without replacing it or reporting
   expect(onRecoverableError).not.toHaveBeenCalled();
   await act(async () => root.unmount());
   container.remove();
+});
+
+it.each([
+  ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows', 'x64-setup.exe'],
+  ['Mozilla/5.0 (X11; Linux x86_64)', 'linux', 'amd64.AppImage'],
+  ['Mozilla/5.0 (Macintosh; Intel Mac OS X)', 'mac', 'aarch64.dmg'],
+  ['Mozilla/5.0 (Linux; Android 15)', 'windows', 'x64-setup.exe'],
+])('selects the existing platform default for %s', async (userAgent, platform, filename) => {
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
+  render(<App />);
+  await waitFor(() => expect(document.querySelector('#hero-download').href).toContain(filename));
+  expect(document.querySelector(`[data-platform="${platform}"]`).getAttribute('aria-pressed')).toBe('true');
 });

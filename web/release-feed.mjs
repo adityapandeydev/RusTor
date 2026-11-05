@@ -16,4 +16,3 @@ export async function fetchReleases(request = fetch, token) {
     if (batch.length < 100) return normalizeReleases(rows);
   }
 }
-
