@@ -18,7 +18,7 @@ RusTor is a desktop BitTorrent client with built-in search, selective downloads,
 - **Stop without deleting your files.** Remove a torrent to stop downloading or seeding while keeping complete and partial files on disk.
 - **Pick up where you left off.** Saved torrents, destinations, and file selections return when you reopen RusTor. Existing data is checked before transfers resume.
 - **Set your own limits.** Choose a default download folder and control download and upload speeds across your session.
-- **Choose your theme.** Navy and peach in dark mode, with a warm light mode to match. Your appearance preference is saved, and animations respect reduced-motion settings.
+- **Choose your theme.** Deep teal and lime in dark mode, with a pearl light mode to match. Your appearance preference is saved, and animations respect reduced-motion settings.
 
 ## Get RusTor
 

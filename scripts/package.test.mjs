@@ -47,13 +47,13 @@ test("artifact collection rejects stale versions, absent formats, and ambiguous 
   t.after(() => rm(dir, { recursive: true, force: true }));
   await mkdir(join(dir, "nsis"));
   await writeFile(join(dir, "nsis/RusTor_0.0.9_x64-setup.exe"), "old");
-  await assert.rejects(findBundles(dir, ["nsis"], "0.1.1", 0));
-  const installer = join(dir, "nsis/RusTor_0.1.1_x64-setup.exe");
+  await assert.rejects(findBundles(dir, ["nsis"], "0.1.2", 0));
+  const installer = join(dir, "nsis/RusTor_0.1.2_x64-setup.exe");
   await writeFile(installer, "new");
-  assert.deepEqual(await findBundles(dir, ["nsis"], "0.1.1", 0), [installer]);
-  await assert.rejects(findBundles(dir, ["nsis"], "0.1.1", Date.now() + 10000));
-  await writeFile(join(dir, "nsis/Other_0.1.1_x64-setup.exe"), "duplicate");
-  await assert.rejects(findBundles(dir, ["nsis"], "0.1.1", 0));
+  assert.deepEqual(await findBundles(dir, ["nsis"], "0.1.2", 0), [installer]);
+  await assert.rejects(findBundles(dir, ["nsis"], "0.1.2", Date.now() + 10000));
+  await writeFile(join(dir, "nsis/Other_0.1.2_x64-setup.exe"), "duplicate");
+  await assert.rejects(findBundles(dir, ["nsis"], "0.1.2", 0));
 });
 
 test("checksums cover distributed files and change when an artifact changes", async (t) => {

@@ -3936,7 +3936,7 @@ dependencies = [
 
 [[package]]
 name = "rustor-desktop"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "librqbit",
  "rustor-search",
@@ -3952,7 +3952,7 @@ dependencies = [
 
 [[package]]
 name = "rustor-search"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "data-encoding",
@@ -3969,7 +3969,7 @@ dependencies = [
 
 [[package]]
 name = "rustor-torrent"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "librqbit",
