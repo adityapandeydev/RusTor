@@ -103,6 +103,16 @@ function renderMore() {
   $('#more-releases').hidden = shown >= releases.length;
 }
 
+// Delegate so package links rebuilt by the platform picker get the same feedback.
+// Keep the anchor's default action: the download never waits for the animation.
+document.addEventListener('click', event => {
+  const arrow = event.target.closest('.download-button')?.querySelector('.button-icon svg');
+  if (!arrow || reducedMotion.matches) return;
+  arrow.getAnimations().forEach(animation => animation.cancel());
+  arrow.animate([{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-360deg)' }],
+    { duration: 700, easing: 'cubic-bezier(.25,.1,.25,1)' });
+});
+
 for (const button of document.querySelectorAll('[data-platform]')) button.addEventListener('click', () => { platform = button.dataset.platform; drawDownloads(); });
 for (const button of document.querySelectorAll('[data-architecture]')) button.addEventListener('click', () => { architecture = button.dataset.architecture; drawDownloads(); });
 $('#more-releases').addEventListener('click', renderMore);
