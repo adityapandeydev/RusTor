@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { packageLinks, preferredRelease, fileSize, REPOSITORY } from '../releases.mjs';
 import { DownloadLink, ReleaseArchive } from './Downloads.jsx';
 import { useSiteMotion } from './motion.js';
+import AnalyticsConsent from './AnalyticsConsent.jsx';
 
 const descriptions = {
   windows: 'Windows x64. The installer can set up WebView2 if needed.',
@@ -125,6 +126,6 @@ export default function App({ initialReleases = [] }) {
       <details><summary>Where does the search come from?</summary><p>RusTor’s search behavior draws on Torlink. Results depend on external source availability; metadata can be missing or up to five minutes old. Torrents using only BitTorrent v2 are currently unsupported.</p></details>
     </div></div></section>
   </main>
-  <footer className="site-footer"><div className="frame"><div className="footer-top"><a className="footer-name" href="#main">RusTor<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a><p>Made by <a href="https://github.com/adityapandeydev">Aditya Pandey</a>.<br />Piece by piece.</p></div><div className="footer-bottom"><span>© <span id="year">{year}</span> RusTor</span><nav aria-label="Footer navigation"><a href="https://github.com/adityapandeydev/RusTor">Source code</a><a href="https://github.com/adityapandeydev/RusTor/issues">Report a bug</a><a href="https://github.com/adityapandeydev/RusTor/blob/main/LICENSE">MIT License</a><a href="https://github.com/baairon/torlink">Torlink</a></nav></div><p className="caption footer-privacy">No analytics, cookies or forms on this site. GitHub hosts the site and downloads. Product views show illustrative transfers.</p></div></footer>
+  <footer className="site-footer"><div className="frame"><div className="footer-top"><a className="footer-name" href="#main">RusTor<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></a><p>Made by <a href="https://github.com/adityapandeydev">Aditya Pandey</a>.<br />Piece by piece.</p></div><div className="footer-bottom"><span>© <span id="year">{year}</span> RusTor</span><nav aria-label="Footer navigation"><a href="https://github.com/adityapandeydev/RusTor">Source code</a><a href="https://github.com/adityapandeydev/RusTor/issues">Report a bug</a><a href="https://github.com/adityapandeydev/RusTor/blob/main/LICENSE">MIT License</a><a href="https://github.com/baairon/torlink">Torlink</a></nav></div><p className="caption footer-privacy">Optional Google Analytics measures site visits and download clicks only with your permission. GitHub hosts the site and downloads. Product views show illustrative transfers.</p><AnalyticsConsent /></div></footer>
   </>;
 }

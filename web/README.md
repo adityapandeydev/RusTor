@@ -20,7 +20,17 @@ The dev server serves the JSX directly. The release build fetches all public Git
 
 The Pages workflow deploys on website changes, public release events, manual dispatch and its existing schedule. Relative Vite asset paths support the `/RusTor/` project URL. Do not commit generated `dist/` output.
 
-Product captures use disclosed example transfers; their origins and the font license are preserved in `public/assets/`. The feed retains explicit preview/stable and Mac architecture choices. Release titles render as React text, never as release-provided HTML. Drafts, credentials, source, tests, build scripts and internal documents are not published. No analytics, forms, cookies or remote font service are added.
+Product captures use disclosed example transfers; their origins and the font license are preserved in `public/assets/`. The feed retains explicit preview/stable and Mac architecture choices. Release titles render as React text, never as release-provided HTML. Drafts, credentials, source, tests, build scripts and internal documents are not published. No forms or remote font service are added.
+
+## Optional website analytics
+
+GA4 uses the public Measurement ID `G-TVDKMQ11N1` directly, without a Tag Manager container or API secret. `src/analytics.js` loads Google's tag only after an explicit opt-in, and only on the production `/RusTor/` URL. Local previews and tests do not send analytics. Advertising consent stays denied and Google Signals is disabled. The preference is stored locally; analytics cookies are host-only and scoped to `/RusTor/`.
+
+`AnalyticsConsent.jsx` offers allow/decline choices and a footer preference control. Turning analytics off clears this project's GA cookies and reloads the page to unload the tag. Without JavaScript, no analytics runs and downloads remain available. Blocking analytics never intentionally delays or redirects a download. Consent-based measurement excludes visitors who decline, block scripts, or never opt in.
+
+Actual installer/package links send `download_click` with `platform`, `version`, `file_name`, `button_location` and `link_url`. Locations are `hero`, `platform-picker` or `release-archive`. Checksums, release-info bundles, navigation, and release-note links are excluded. One click is download intent, not proof of completion or installation. No desktop app activity, magnet links or torrent searches are instrumented.
+
+After deployment, use GA4 Realtime/DebugView to verify visits and clicks. In Admin, mark `download_click` as a key event; keep the counting method **once per event** for total clicks. GA4 user key-event rate measures the share of measured users who trigger it. Register event-scoped custom dimensions for `platform`, `version`, `file_name` and `button_location` to use them in reports/Explorations. Do not add `download_click` and Enhanced Measurement's `file_download` together: the same click can produce both. Restrict Enhanced Measurement to page views, scrolls, outbound clicks and file downloads; this site has no search form, video player or lead form to measure.
 
 ## Search discovery
 

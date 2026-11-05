@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { fileSize, REPOSITORY } from '../releases.mjs';
+import { analytics } from './analytics.js';
 
 export function DownloadLink({ href, label, id, external = false }) {
   function animateArrow(event) {
+    analytics().download(href, id === 'hero-download' ? 'hero' : 'platform-picker');
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const arrow = event.currentTarget.querySelector('.button-icon svg');
     arrow.getAnimations().forEach(animation => animation.cancel());
@@ -23,7 +25,7 @@ function ReleaseEntry({ release }) {
       <span className="release-meta"><time dateTime={release.published}>{new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(release.published))}</time><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>
     </button>
     <div className="release-panel" id={`assets-${release.id}`} hidden={!expanded}>
-      <div className="release-assets">{release.assets.map(asset => <a key={asset.url} href={asset.url}>{asset.name} · {fileSize(asset.size)}</a>)}</div>
+      <div className="release-assets">{release.assets.map(asset => <a key={asset.url} href={asset.url} onClick={() => analytics().download(asset.url, 'release-archive')}>{asset.name} · {fileSize(asset.size)}</a>)}</div>
       <a className="release-notes-link" href={release.url}>Read release notes on GitHub</a>
     </div>
   </article>;
