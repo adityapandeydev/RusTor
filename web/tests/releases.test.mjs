@@ -4,10 +4,10 @@ import { normalizeReleases, preferredRelease, packageLinks } from '../releases.m
 
 const root = 'https://github.com/adityapandeydev/RusTor';
 function release(overrides = {}) {
-  return { id: 1, name: 'RusTor preview', tag_name: 'v0.1.1-preview.1', draft: false,
-    prerelease: true, published_at: '2026-11-04T07:00:00Z', html_url: `${root}/releases/tag/v0.1.1-preview.1`,
-    assets: [{ name: 'RusTor_0.1.1_x64-setup.exe', size: 5719626, state: 'uploaded',
-      browser_download_url: `${root}/releases/download/v0.1.1-preview.1/RusTor_0.1.1_x64-setup.exe` }], ...overrides };
+  return { id: 1, name: 'RusTor preview', tag_name: 'v0.1.2-preview.1', draft: false,
+    prerelease: true, published_at: '2026-11-04T07:00:00Z', html_url: `${root}/releases/tag/v0.1.2-preview.1`,
+    assets: [{ name: 'RusTor_0.1.2_x64-setup.exe', size: 5719626, state: 'uploaded',
+      browser_download_url: `${root}/releases/download/v0.1.2-preview.1/RusTor_0.1.2_x64-setup.exe` }], ...overrides };
 }
 
 test('only published, valid releases reach the public archive; newer releases sort first', () => {
@@ -31,11 +31,11 @@ test('release and asset links reject script URLs, another repository, credential
 });
 
 test('platform matching keeps installers, standalone archives and Mac architectures distinct', () => {
-  const names = ['RusTor_0.1.1_x64-setup.exe', 'RusTor_0.1.1_x64-standalone.zip',
-    'RusTor_0.1.1_amd64.AppImage', 'RusTor_0.1.1_amd64.deb', 'RusTor_0.1.1_aarch64.dmg',
-    'RusTor_0.1.1_x64.dmg', 'RusTor_0.1.1_release-info.zip', 'SHA256SUMS'];
+  const names = ['RusTor_0.1.2_x64-setup.exe', 'RusTor_0.1.2_x64-standalone.zip',
+    'RusTor_0.1.2_amd64.AppImage', 'RusTor_0.1.2_amd64.deb', 'RusTor_0.1.2_aarch64.dmg',
+    'RusTor_0.1.2_x64.dmg', 'RusTor_0.1.2_release-info.zip', 'SHA256SUMS'];
   const row = normalizeReleases([release({ assets: names.map(name => ({ name, state: 'uploaded', size: 100,
-    browser_download_url: `${root}/releases/download/v0.1.1-preview.1/${name}` })) })])[0];
+    browser_download_url: `${root}/releases/download/v0.1.2-preview.1/${name}` })) })])[0];
   assert.equal(packageLinks(row, 'windows').length, 2);
   assert.equal(packageLinks(row, 'linux').length, 2);
   assert.match(packageLinks(row, 'mac-arm')[0].name, /aarch64/);

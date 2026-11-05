@@ -49,7 +49,7 @@ async function main() {
   if (!args.includes('--serve')) return;
   const root = await realpath(output);
   const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.mjs': 'text/javascript',
-    '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.webp': 'image/webp' };
+    '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' };
   createServer(async (request, response) => {
     try {
       const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);

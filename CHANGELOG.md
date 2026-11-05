@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2
+
+### Changed
+
+- Refresh both app themes with deep teal, pearl and lime, preserving the existing layout and download behavior.
+- Rebuild the website with an animated landing graphic, interactive download buttons, complete app previews and a public release archive.
+
+
 ## 0.1.1
 
 ### Fixed
