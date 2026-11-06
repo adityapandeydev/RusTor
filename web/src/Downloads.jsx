@@ -32,11 +32,9 @@ function ReleaseEntry({ release }) {
 }
 
 export function ReleaseArchive({ releases }) {
-  const [shown, setShown] = useState(5);
   return <div className="archive-content min-w-0">
     <div id="release-list" className="release-list" aria-live="polite">
-      {releases.length ? releases.slice(0, shown).map(release => <ReleaseEntry key={release.id} release={release} />) : <p><a href={`${REPOSITORY}/releases`}>Browse all releases on GitHub</a></p>}
+      {releases.length ? releases.slice(0, 3).map(release => <ReleaseEntry key={release.id} release={release} />) : <p><a href={`${REPOSITORY}/releases`}>Browse all releases on GitHub</a></p>}
     </div>
-    <button className="button secondary-button more-releases" type="button" id="more-releases" hidden={shown >= releases.length} onClick={() => setShown(shown + 5)}>Show older releases</button>
   </div>;
 }

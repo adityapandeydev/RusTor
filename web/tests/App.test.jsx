@@ -62,15 +62,12 @@ it('keeps fallback download links for offline, invalid and empty feeds', async (
   }
 });
 
-it('preserves five-at-a-time pagination and renders release titles as text', async () => {
+it('shows only the latest three feed entries and renders release titles as text', async () => {
   fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ releases: Array.from({ length: 12 }, (_, id) => ({ ...release, id, name: '<img src=x onerror=alert(1)>' })) }) });
   render(<App />);
-  await waitFor(() => expect(document.querySelectorAll('.release-entry')).toHaveLength(5));
-  fireEvent.click(screen.getByRole('button', { name: 'Show older releases' }));
-  expect(document.querySelectorAll('.release-entry')).toHaveLength(10);
-  fireEvent.click(screen.getByRole('button', { name: 'Show older releases' }));
-  expect(document.querySelectorAll('.release-entry')).toHaveLength(12);
-  expect(document.querySelector('#more-releases').hidden).toBe(true);
+  await waitFor(() => expect(document.querySelectorAll('.release-entry')).toHaveLength(3));
+  expect([...document.querySelectorAll('.release-toggle')].map(button => button.getAttribute('aria-controls'))).toEqual(['assets-0', 'assets-1', 'assets-2']);
+  expect(screen.queryByRole('button', { name: 'Show older releases' })).toBeNull();
   expect(document.querySelectorAll('.release-entry img')).toHaveLength(0);
 });
 

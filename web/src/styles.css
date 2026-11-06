@@ -136,7 +136,6 @@ p{text-wrap:pretty}
 .release-assets a{overflow-wrap:anywhere;font-size:14px;max-width:100%}
 .release-notes-link{display:inline-block;margin-block:24px 8px;font-size:14px;font-weight:600}
 .secondary-button{background:var(--teal);color:var(--pearl);padding:16px 24px;min-height:56px}
-.more-releases{@apply mt-6}
 .questions .section-space{padding-top:0}
 .faq-layout{display:grid;grid-template-columns:.8fr 1.2fr;gap:96px}
 .faq-grid{@apply grid content-start}
