@@ -5,6 +5,41 @@ use support::{Fixture, config, wait_for};
 use tempfile::TempDir;
 
 #[tokio::test(flavor = "multi_thread")]
+async fn update_shutdown_refuses_incomplete_saved_state_and_preserves_the_live_session() {
+    let fixture = Fixture::new().await;
+    let root = TempDir::new().unwrap();
+    let engine = Engine::open(config(root.path())).await.unwrap();
+    let added = engine
+        .add(
+            TorrentInput::from_bytes(fixture.bytes.clone()).unwrap(),
+            AddOptions {
+                paused: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let database = root.path().join("state/session.json");
+    let committed = tokio::fs::read(&database).await.unwrap();
+    tokio::fs::write(&database, br#"{"torrents":{}}"#)
+        .await
+        .unwrap();
+    assert!(matches!(
+        engine.shutdown_for_update().await,
+        Err(Error::SessionNotSaved)
+    ));
+    assert_eq!(engine.list().await.unwrap().len(), 1);
+    tokio::fs::write(&database, &committed).await.unwrap();
+    engine.shutdown_for_update().await.unwrap();
+    assert!(matches!(engine.list().await, Err(Error::Stopped)));
+    let restored = Engine::open(config(root.path())).await.unwrap();
+    assert_eq!(restored.list().await.unwrap().len(), 1);
+    wait_for(&restored, &added.id, TorrentState::Paused).await;
+    restored.shutdown().await.unwrap();
+    fixture.session.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn control_save_failures_are_reported_and_payloads_are_preserved() {
     for action in ["pause", "resume", "remove"] {
         let fixture = Fixture::new().await;

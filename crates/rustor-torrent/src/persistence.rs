@@ -123,6 +123,57 @@ impl Persistence {
         })
         .await
     }
+
+    /// Called with the engine's exclusive operation gate held. Validate both
+    /// directions: a missing saved torrent is just as unsafe as a stale one.
+    pub async fn checkpoint(&self, session: &Session) -> Result<(), Error> {
+        let handles = session
+            .with_torrents(|rows| rows.map(|(_, handle)| handle.clone()).collect::<Vec<_>>());
+        confirm_saved(|| async {
+            let saved = self.read(handles.is_empty()).await?;
+            if saved.torrents.len() != handles.len() {
+                return Err(Error::SessionNotSaved);
+            }
+            saved
+                .verify_restored(session)
+                .map_err(|_| Error::SessionNotSaved)?;
+            for handle in &handles {
+                self.verify_metainfo(&TorrentId::parse(&handle.info_hash().as_string())?)
+                    .await?;
+            }
+            Ok(())
+        })
+        .await?;
+        let mut paths = handles
+            .iter()
+            .map(|handle| {
+                self.directory
+                    .join(format!("{}.torrent", handle.info_hash().as_string()))
+            })
+            .collect::<Vec<_>>();
+        let database = self.directory.join("session.json");
+        if !handles.is_empty() || database.exists() {
+            paths.push(database);
+        }
+        let directory = self.directory.clone();
+        tokio::task::spawn_blocking(move || {
+            for path in paths {
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(path)?
+                    .sync_all()?;
+            }
+            #[cfg(unix)]
+            std::fs::File::open(directory)?.sync_all()?;
+            #[cfg(not(unix))]
+            let _ = directory;
+            Ok::<_, std::io::Error>(())
+        })
+        .await
+        .map_err(|_| Error::SessionNotSaved)?
+        .map_err(|_| Error::SessionNotSaved)
+    }
 }
 
 // The pinned native writer uses Tokio File::write_all without flush. Its last

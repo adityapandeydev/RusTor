@@ -591,6 +591,19 @@ impl Engine {
         }
         Ok(())
     }
+
+    /// Drain accepted operations, verify and flush recovery files, then stop.
+    /// A failed checkpoint leaves the existing session running for recovery.
+    pub async fn shutdown_for_update(&self) -> Result<(), Error> {
+        let mut guard = self.session.write().await;
+        if let Some(session) = guard.as_ref() {
+            self.persistence.checkpoint(&session.native).await?;
+        }
+        if let Some(session) = guard.take() {
+            session.native.stop().await;
+        }
+        Ok(())
+    }
 }
 
 fn handle(session: &Session, id: &TorrentId) -> Result<Arc<ManagedTorrent>, Error> {
