@@ -187,3 +187,11 @@ test("signed packaging fails before building when production credentials are abs
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Signed updater builds require/);
 });
+
+test("signed packaging refuses a CI public key that differs from the app trust key", () => {
+  const env = { ...process.env, TAURI_SIGNING_PRIVATE_KEY: "not-a-production-key", RUSTOR_UPDATER_PUBLIC_KEY: "mismatched-public-key" };
+  const cli = fileURLToPath(new URL("./package.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [cli, "--updater"], { env, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /must match the trusted key embedded in the app/);
+});

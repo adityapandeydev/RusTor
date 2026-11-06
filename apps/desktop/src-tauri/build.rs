@@ -1,5 +1,5 @@
 fn main() {
-    println!("cargo:rerun-if-env-changed=RUSTOR_UPDATER_PUBLIC_KEY");
+    println!("cargo:rerun-if-changed=updater.pub");
     let windows_msvc = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
         && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");
     // Tauri's default manifest contains the same Common Controls dependency,

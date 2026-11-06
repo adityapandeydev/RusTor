@@ -16,7 +16,7 @@ mod test_fixture;
 
 const ENDPOINT: &str =
     "https://github.com/adityapandeydev/RusTor/releases/latest/download/latest.json";
-const PUBLIC_KEY: Option<&str> = option_env!("RUSTOR_UPDATER_PUBLIC_KEY");
+const PUBLIC_KEY: &str = include_str!("../updater.pub");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -134,7 +134,7 @@ impl Updates {
         let result = async {
             let updater = app
                 .updater_builder()
-                .pubkey(PUBLIC_KEY.unwrap_or_default())
+                .pubkey(PUBLIC_KEY.trim())
                 .endpoints(vec![ENDPOINT.parse().expect("constant HTTPS updater URL")])
                 .map_err(check_error)?
                 .timeout(Duration::from_secs(300))
@@ -267,7 +267,7 @@ impl Updates {
 }
 
 fn availability() -> Result<(), CommandError> {
-    if PUBLIC_KEY.is_none_or(|key| key.trim().is_empty()) {
+    if PUBLIC_KEY.trim().is_empty() {
         return Err(CommandError::new(
             "updater_not_configured",
             "In-app updates will be enabled after release signing is configured. You can install a newer release over this version without uninstalling it.",

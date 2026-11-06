@@ -18,6 +18,8 @@ const updater = args.includes("--updater");
 if (updater) args.splice(args.indexOf("--updater"), 1);
 if (updater && (!process.env.TAURI_SIGNING_PRIVATE_KEY || !process.env.RUSTOR_UPDATER_PUBLIC_KEY))
   throw new Error("Signed updater builds require TAURI_SIGNING_PRIVATE_KEY and RUSTOR_UPDATER_PUBLIC_KEY");
+if (updater && (await readFile(join(root, "apps/desktop/src-tauri/updater.pub"), "utf8")).trim() !== process.env.RUSTOR_UPDATER_PUBLIC_KEY.trim())
+  throw new Error("The CI updater public key must match the trusted key embedded in the app");
 const host = run(["rustc", "-vV"], root, true).match(/^host: (.+)$/m)?.[1].trim();
 const target = args.length === 2 && args[0] === "--target" ? args[1] : host;
 if (args.length !== 0 && !(args.length === 2 && args[0] === "--target"))
@@ -62,7 +64,9 @@ const override = join(resources, "bundle-config.json");
 await writeFile(override, JSON.stringify({
   build: { beforeBuildCommand: "" },
   ...(updater ? { plugins: { updater: { pubkey: process.env.RUSTOR_UPDATER_PUBLIC_KEY, requireSignedVersion: true } } } : {}),
-  bundle: { active: true, createUpdaterArtifacts: updater, resources: { "../dist/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt" } },
+  bundle: { active: true, createUpdaterArtifacts: updater,
+    ...(updater && target.endsWith("apple-darwin") ? { macOS: { signingIdentity: "-" } } : {}),
+    resources: { "../dist/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt" } },
 }));
 const started = Date.now() - 1000;
 // Updater signatures authenticate update bytes; they are NOT OS code signing.
