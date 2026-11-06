@@ -51,6 +51,17 @@ export interface Selection {
   id: string;
   label: string;
 }
+export interface UpdateStatus {
+  revision: number;
+  phase: "unavailable" | "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "installing" | "failed";
+  version: string | null;
+  notes: string | null;
+  downloaded: number;
+  total: number | null;
+  error: CommandError | null;
+  retry: "check" | "download" | "install" | null;
+  transfers_stopped: boolean;
+}
 export type AddSource =
   { kind: "magnet"; value: string } | { kind: "file"; id: string };
 export interface TorrentFile {
@@ -83,6 +94,11 @@ export interface DesktopApi {
   retry(id: string): Promise<void>;
   saveSettings(update: SettingsUpdate): Promise<Snapshot>;
   quit(): Promise<void>;
+  updateStatus(): Promise<UpdateStatus>;
+  subscribeUpdates(callback: (status: UpdateStatus) => void): Promise<() => void>;
+  checkUpdate(): Promise<UpdateStatus>;
+  downloadUpdate(): Promise<UpdateStatus>;
+  installUpdate(): Promise<void>;
 }
 
 export const desktop: DesktopApi = {
@@ -108,6 +124,11 @@ export const desktop: DesktopApi = {
   retry: (id) => invoke("retry_torrent", { id }),
   saveSettings: (request) => invoke("save_settings", { request }),
   quit: () => invoke("quit_app"),
+  updateStatus: () => invoke("get_update_status"),
+  subscribeUpdates: (callback) => listen<UpdateStatus>("update-status", (event) => callback(event.payload)),
+  checkUpdate: () => invoke("check_update"),
+  downloadUpdate: () => invoke("download_update"),
+  installUpdate: () => invoke("install_update"),
 };
 
 export function errorMessage(error: unknown): string {

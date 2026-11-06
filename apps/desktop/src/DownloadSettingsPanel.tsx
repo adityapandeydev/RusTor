@@ -9,6 +9,7 @@ import type {
   Snapshot,
 } from "./bridge";
 import { displayPath } from "./format";
+import { UpdateControls } from "./UpdateControls";
 
 const MAX_RATE_KIB = 976_562;
 
@@ -224,6 +225,7 @@ export function DownloadSettingsPanel({
           Login launches start in the tray (minimized on Linux). Opening RusTor yourself always shows its window. If the tray or startup fails, the window stays available.
         </p>
       </div>
+      <UpdateControls api={api} />
       <div className="settings-actions">
         <button
           type="button"

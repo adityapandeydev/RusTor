@@ -385,7 +385,7 @@ export default function App({
               aria-label="Download settings"
               title="Download settings"
               aria-expanded={settingsOpen}
-              disabled={!ready || adding || choosing || settingsOpen}
+              disabled={!snapshot || snapshot.phase === "starting" || adding || choosing || settingsOpen}
               onClick={() => setSettingsOpen(true)}
             >
               <Settings2 size={18} aria-hidden="true" />

@@ -56,6 +56,11 @@ function api(snapshot = initial) {
     retry: vi.fn().mockResolvedValue(undefined),
     saveSettings: vi.fn().mockResolvedValue({ ...initial, revision: 2 }),
     quit: vi.fn().mockResolvedValue(undefined),
+    updateStatus: vi.fn().mockResolvedValue({ revision: 0, phase: "idle", version: null, notes: null, downloaded: 0, total: null, error: null, retry: null, transfers_stopped: false }),
+    subscribeUpdates: vi.fn().mockResolvedValue(() => {}),
+    checkUpdate: vi.fn(),
+    downloadUpdate: vi.fn(),
+    installUpdate: vi.fn(),
   };
   return { service, emit: (value: Snapshot) => receive(value), unsubscribe };
 }
@@ -525,7 +530,16 @@ it("preserves settings edits after a save error without claiming success", async
     "value",
     "64",
   );
-  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.queryByText("Settings saved. Speed limits are active; new torrents will use the default folder.")).toBeNull();
+});
+
+it("keeps update retry and Quit reachable when the engine is stopped after an installer failure", async () => {
+  const { service } = api({ ...initial, phase: "failed", error: { code: "stopped", message: "Transfers are stopped." } });
+  vi.mocked(service.updateStatus).mockResolvedValue({ revision: 1, phase: "failed", version: "0.2.0", notes: null, downloaded: 100, total: 100, error: { code: "update_install_failed", message: "Retry installation or reopen RusTor." }, retry: "install", transfers_stopped: true });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
+  expect(await screen.findByRole("button", { name: "Retry installation" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Quit RusTor" })).toBeTruthy();
 });
 
 it("opens Discover results in the existing file-selection flow without starting a transfer", async () => {
