@@ -20,6 +20,22 @@ pub struct Lifecycle {
 }
 
 impl Lifecycle {
+    pub fn begin_update(&self) -> Result<(), CommandError> {
+        if self.begin_quit() {
+            Ok(())
+        } else {
+            Err(CommandError::new(
+                "stopped",
+                "RusTor is already quitting or installing an update.",
+            ))
+        }
+    }
+    pub fn update_failed(&self) {
+        self.quitting.store(false, Ordering::Release);
+    }
+    pub fn finish_update(&self) {
+        self.complete.store(true, Ordering::Release);
+    }
     pub fn foreground_requested(&self) -> bool {
         self.foreground_requested.load(Ordering::Acquire)
     }

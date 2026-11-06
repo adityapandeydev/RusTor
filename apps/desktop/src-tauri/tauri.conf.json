@@ -3,6 +3,7 @@
   "productName": "RusTor",
   "version": "0.1.2",
   "identifier": "dev.adityapandey.rustor",
+  "plugins": { "updater": { "pubkey": "", "requireSignedVersion": true, "windows": { "installMode": "passive" } } },
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://127.0.0.1:4173",

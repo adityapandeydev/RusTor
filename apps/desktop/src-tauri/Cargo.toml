@@ -17,6 +17,7 @@ tauri = { version = "=2.12.5", features = ["tray-icon"] }
 tauri-plugin-dialog = "=2.8.4"
 tauri-plugin-autostart = "=2.7.0"
 tauri-plugin-single-instance = "=2.5.5"
+tauri-plugin-updater = "=2.14.1"
 rustor-torrent = { path = "../../../crates/rustor-torrent" }
 rustor-search = { path = "../../../crates/rustor-search" }
 serde.workspace = true
@@ -29,6 +30,7 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [dev-dependencies]
 librqbit.workspace = true
+tauri = { version = "=2.12.5", features = ["test"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-registry = "=0.6.1"

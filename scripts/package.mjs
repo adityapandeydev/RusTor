@@ -61,6 +61,7 @@ await writeFile(notice, renderNotices(rust, frontend) + extraNotices.join("\n\n"
 const override = join(resources, "bundle-config.json");
 await writeFile(override, JSON.stringify({
   build: { beforeBuildCommand: "" },
+  ...(updater ? { plugins: { updater: { pubkey: process.env.RUSTOR_UPDATER_PUBLIC_KEY, requireSignedVersion: true } } } : {}),
   bundle: { active: true, createUpdaterArtifacts: updater, resources: { "../dist/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt" } },
 }));
 const started = Date.now() - 1000;

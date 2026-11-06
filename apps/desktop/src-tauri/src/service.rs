@@ -521,6 +521,31 @@ impl DesktopState {
         }
     }
 
+    pub async fn shutdown_for_update(&self) -> Result<(), CommandError> {
+        // Reject new commands before awaiting the settings and engine gates.
+        self.stopping.store(true, Ordering::Release);
+        self.initialize().await;
+        let settings = self.settings.lock().await;
+        let result = async {
+            settings.save(self.settings_path.clone()).await?;
+            match self.engine.get() {
+                Some(Ok(engine)) => engine
+                    .shutdown_for_update()
+                    .await
+                    .map_err(CommandError::from),
+                _ => Err(CommandError::new(
+                    "engine_unavailable",
+                    "The session is unavailable. Reopen RusTor before updating.",
+                )),
+            }
+        }
+        .await;
+        if result.is_err() {
+            self.stopping.store(false, Ordering::Release);
+        }
+        result
+    }
+
     pub async fn report_background_error(&self, error: CommandError) {
         *self.background_error.lock().await = Some(error);
     }

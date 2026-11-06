@@ -3,6 +3,7 @@ mod search;
 mod service;
 mod settings;
 mod startup;
+mod updater;
 
 use service::{
     AddSource, AppSnapshot, CommandError, DesktopState, PreparedSelection, SaveSettingsRequest,
@@ -177,6 +178,7 @@ pub fn run() {
             }
         }))
         .plugin(autostart.build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(lifecycle::Lifecycle::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -194,9 +196,14 @@ pub fn run() {
             start_search,
             get_search_snapshot,
             cancel_search,
-            quit_app
+            quit_app,
+            updater::get_update_status,
+            updater::check_update,
+            updater::download_update,
+            updater::install_update
         ])
         .setup(move |app| {
+            app.manage(updater::Updates::new(app.handle()));
             let download_dir = app.path().download_dir()?.join("RusTor");
             let state_dir = app.path().app_local_data_dir()?.join("engine");
             // Development smoke tests can isolate state from the normal app profile.
@@ -239,8 +246,17 @@ pub fn run() {
                         lifecycle::report(&handle, CommandError::new("window_unavailable", error.to_string()));
                     }
                 }
-                while !state.stopping.load(Ordering::Acquire) {
-                    let _ = handle.emit("torrent-snapshot", state.snapshot().await);
+                // A failed update checkpoint can reopen the operation gate;
+                // keep reporting status until exit is actually committed.
+                while !handle.state::<lifecycle::Lifecycle>().complete() {
+                    // Avoid a stopped-engine error flash during normal quit or
+                    // installation. If installation fails, expose the stopped
+                    // state so controls cannot pretend transfers are running.
+                    if !state.stopping.load(Ordering::Acquire)
+                        || handle.state::<updater::Updates>().snapshot().phase == updater::Phase::Failed
+                    {
+                        let _ = handle.emit("torrent-snapshot", state.snapshot().await);
+                    }
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
             });
