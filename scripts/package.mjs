@@ -3,6 +3,7 @@ import { appendFile, copyFile, mkdir, mkdtemp, readFile, readdir, writeFile } fr
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checksumManifest, findBundles, platformPlan, renderNotices } from "./package-lib.mjs";
+import { collectUpdater, updaterPlan } from "./updater-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function run(args, cwd = root, capture = false) {
@@ -13,12 +14,17 @@ function run(args, cwd = root, capture = false) {
 }
 
 const args = process.argv.slice(2);
+const updater = args.includes("--updater");
+if (updater) args.splice(args.indexOf("--updater"), 1);
+if (updater && (!process.env.TAURI_SIGNING_PRIVATE_KEY || !process.env.RUSTOR_UPDATER_PUBLIC_KEY))
+  throw new Error("Signed updater builds require TAURI_SIGNING_PRIVATE_KEY and RUSTOR_UPDATER_PUBLIC_KEY");
 const host = run(["rustc", "-vV"], root, true).match(/^host: (.+)$/m)?.[1].trim();
 const target = args.length === 2 && args[0] === "--target" ? args[1] : host;
 if (args.length !== 0 && !(args.length === 2 && args[0] === "--target"))
-  throw new Error("Usage: bun run desktop:package [--target NATIVE_TARGET]");
+  throw new Error("Usage: bun run desktop:package [--target NATIVE_TARGET] [--updater]");
 if (target !== host || process.env.CARGO_BUILD_TARGET) throw new Error("Package on a native runner without CARGO_BUILD_TARGET; cross-builds are not configured");
 const plan = platformPlan(target);
+const bundles = updater ? updaterPlan(target).bundles : plan.bundles;
 const config = JSON.parse(await readFile(join(root, "apps/desktop/src-tauri/tauri.conf.json"), "utf8"));
 const version = config.version;
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Packaging expects a numeric MAJOR.MINOR.PATCH version");
@@ -55,13 +61,16 @@ await writeFile(notice, renderNotices(rust, frontend) + extraNotices.join("\n\n"
 const override = join(resources, "bundle-config.json");
 await writeFile(override, JSON.stringify({
   build: { beforeBuildCommand: "" },
-  bundle: { active: true, resources: { "../dist/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt" } },
+  bundle: { active: true, createUpdaterArtifacts: updater, resources: { "../dist/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt" } },
 }));
 const started = Date.now() - 1000;
-// Preview packages are explicitly unsigned. Publication/signing is a separate step.
-run(["bun", "run", "tauri", "build", "--ci", "--no-sign", "--config", override, "--bundles", plan.bundles.join(","), "--", "--locked"], join(root, "apps/desktop"));
+// Updater signatures authenticate update bytes; they are NOT OS code signing.
+// The default preview route must not demand production signing credentials.
+run(["bun", "run", "tauri", "build", "--ci", ...(updater ? [] : ["--no-sign"]), "--config", override, "--bundles", bundles.join(","), "--", "--locked"], join(root, "apps/desktop"));
 for (const bundle of await findBundles(join(targetDir, "release/bundle"), plan.bundles, version, started))
   await copyFile(bundle, join(output, basename(bundle)));
+if (updater)
+  await collectUpdater(join(targetDir, "release/bundle"), output, target, version, started, process.env.RUSTOR_UPDATER_PUBLIC_KEY);
 await copyFile(notice, join(output, "THIRD_PARTY_NOTICES.txt"));
 for (const name of ["LICENSE", "README.md"]) await copyFile(join(root, name), join(output, name));
 if (target.includes("windows")) {
@@ -76,6 +85,7 @@ await writeFile(join(output, "BUILD-INFO.json"), JSON.stringify({
   application: "RusTor", version, target, commit: run(["git", "rev-parse", "HEAD"], root, true).trim(),
   dirty: run(["git", "status", "--porcelain"], root, true).trim().length > 0,
   signing: "Unsigned preview; macOS notarization and public-release signing are not configured.",
+  updater_signing: updater ? "Verified against RUSTOR_UPDATER_PUBLIC_KEY; not OS code signing." : "Not enabled.",
 }, null, 2) + "\n");
 await writeFile(join(output, "SHA256SUMS"), await checksumManifest(output));
 if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `packages-dir=${output}\n`);

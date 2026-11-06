@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      updater:
+        description: Build signed updater artifacts and a verified manifest (main only; no publication)
+        type: boolean
+        default: false
+      notes:
+        description: Release notes for the updater manifest
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -32,6 +41,12 @@ jobs:
             target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Restrict updater credentials to main
+        if: inputs.updater == true && github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          echo 'Signed updater builds must run from main.' >&2
+          exit 1
       - name: Linux build prerequisites
         if: runner.os == 'Linux'
         run: |
@@ -63,12 +78,50 @@ jobs:
           cargo install cargo-about --version 0.9.3 --features cli --locked
       - name: Build unsigned preview packages and checksums
         id: package
+        if: inputs.updater != true
         env:
           NO_STRIP: 'true'
         run: bun run desktop:package --target ${{ matrix.target }}
+      - name: Build and verify updater-signed packages
+        id: updater
+        if: github.event_name == 'workflow_dispatch' && inputs.updater == true && github.ref == 'refs/heads/main'
+        env:
+          NO_STRIP: 'true'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          RUSTOR_UPDATER_PUBLIC_KEY: ${{ vars.RUSTOR_UPDATER_PUBLIC_KEY }}
+        run: bun run desktop:package --target ${{ matrix.target }} --updater
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: RusTor-${{ matrix.target }}-unsigned
-          path: ${{ steps.package.outputs.packages-dir }}
+          name: RusTor-${{ matrix.target }}-${{ inputs.updater == true && 'updater' || 'unsigned' }}
+          path: ${{ steps.updater.outputs.packages-dir || steps.package.outputs.packages-dir }}
+          if-no-files-found: error
+          retention-days: 14
+
+  updater-manifest:
+    name: Verify complete updater feed
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.updater == true && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: RusTor-*-updater
+          path: updater-packages
+      - name: Assemble only after every native artifact verifies
+        env:
+          RUSTOR_UPDATER_PUBLIC_KEY: ${{ vars.RUSTOR_UPDATER_PUBLIC_KEY }}
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/updater-notes.txt"
+          node scripts/updater-manifest.mjs --packages updater-packages --notes "$RUNNER_TEMP/updater-notes.txt" --output updater-feed/latest.json
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: RusTor-updater-manifest
+          path: updater-feed/latest.json
           if-no-files-found: error
           retention-days: 14
