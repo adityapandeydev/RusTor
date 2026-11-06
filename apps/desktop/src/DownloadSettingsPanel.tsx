@@ -16,12 +16,14 @@ export function DownloadSettingsPanel({
   api,
   settings,
   trayAvailable,
+  startup,
   onSaved,
   onClose,
 }: {
   api: DesktopApi;
   settings: DownloadSettings;
   trayAvailable: boolean;
+  startup: Snapshot["startup"];
   onSaved: (snapshot: Snapshot) => void;
   onClose: () => void;
 }) {
@@ -29,6 +31,9 @@ export function DownloadSettingsPanel({
   const [download, setDownload] = useState(String(settings.download_limit_kib));
   const [upload, setUpload] = useState(String(settings.upload_limit_kib));
   const [background, setBackground] = useState(settings.continue_in_background);
+  const [loginChoice, setLogin] = useState<boolean | null>(null);
+  const login = loginChoice ?? startup.enabled ?? settings.start_at_login;
+  const [minimized, setMinimized] = useState(settings.start_minimized);
   const [saving, setSaving] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +86,8 @@ export function DownloadSettingsPanel({
         download_limit_kib: values[0],
         upload_limit_kib: values[1],
         continue_in_background: trayAvailable && background,
+        start_at_login: login,
+        start_minimized: minimized,
       });
       if (alive.current) onSaved(snapshot);
     } catch (reason) {
@@ -195,6 +202,26 @@ export function DownloadSettingsPanel({
           {trayAvailable
             ? "Keep downloads and seeding running in the system tray. Use Open RusTor to return, or Quit RusTor to save your session and exit. On Linux, the window stays minimized for easy access. Sleep, logout and shutdown interrupt transfers."
             : "The system tray is unavailable. Keep the window open to continue transfers; closing it quits RusTor."}
+        </p>
+      </div>
+      <div className="settings-background">
+        <label>
+          <input type="checkbox" checked={login}
+            disabled={busy || startup.enabled === null} onChange={(event) => setLogin(event.target.checked)}
+            aria-describedby="login-help" />
+          Start at login
+        </label>
+        <p className="settings-help" id="login-help">
+          {startup.error?.message ?? "Open RusTor when you sign in to your computer. This is a login app, not a system service. Quit ends the current session and keeps your next-login preference."}
+        </p>
+        <label>
+          <input type="checkbox" checked={minimized}
+            disabled={busy || !login || !trayAvailable || startup.enabled === null}
+            onChange={(event) => setMinimized(event.target.checked)} aria-describedby="minimized-help" />
+          Start minimized at login
+        </label>
+        <p className="settings-help" id="minimized-help">
+          Login launches start in the tray (minimized on Linux). Opening RusTor yourself always shows its window. If the tray or startup fails, the window stays available.
         </p>
       </div>
       <div className="settings-actions">

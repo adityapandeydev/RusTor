@@ -422,6 +422,7 @@ export default function App({
             api={api}
             settings={snapshot.settings}
             trayAvailable={snapshot.tray_available}
+            startup={snapshot.startup}
             onClose={closeSettings}
             onSaved={(next) => {
               accept(next);

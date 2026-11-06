@@ -18,10 +18,13 @@ const initial: Snapshot = {
     download_limit_kib: 0,
     upload_limit_kib: 0,
     continue_in_background: false,
+      start_at_login: false,
+      start_minimized: false,
   },
   error: null,
   tray_available: true,
   background_error: null,
+  startup: { enabled: false, error: null },
 };
 function api(snapshot = initial) {
   let receive: (snapshot: Snapshot) => void = () => {};
@@ -383,6 +386,8 @@ it("saves native folder handles and session limits from the download settings pa
       download_limit_kib: 128,
       upload_limit_kib: 64,
       continue_in_background: false,
+      start_at_login: false,
+      start_minimized: false,
     },
   });
   render(<App api={service} />);
@@ -403,6 +408,8 @@ it("saves native folder handles and session limits from the download settings pa
       download_limit_kib: 128,
       upload_limit_kib: 64,
       continue_in_background: false,
+      start_at_login: false,
+      start_minimized: false,
     }),
   );
   expect(screen.getByRole("status").textContent).toContain("Settings saved");
@@ -427,6 +434,8 @@ it("persists an explicit close-to-tray choice with the download settings", async
   await waitFor(() => expect(service.saveSettings).toHaveBeenCalledWith({
     destination_id: null, download_limit_kib: 0, upload_limit_kib: 0,
     continue_in_background: true,
+      start_at_login: false,
+      start_minimized: false,
   }));
 });
 
@@ -436,6 +445,30 @@ it("keeps background mode unavailable when there is no native tray", async () =>
   await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
   expect(screen.getByRole("checkbox", { name: "Continue running when closed" })).toHaveProperty("disabled", true);
   expect(screen.getByText(/tray is unavailable/i)).toBeTruthy();
+});
+
+it("uses actual login registration and saves startup choices without enabling them by default", async () => {
+  const { service } = api({ ...initial, startup: { enabled: false, error: null } });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
+  const login = screen.getByRole("checkbox", { name: "Start at login" });
+  expect(login).toHaveProperty("checked", false);
+  const minimized = screen.getByRole("checkbox", { name: "Start minimized at login" });
+  expect(minimized).toHaveProperty("disabled", true);
+  await userEvent.click(login);
+  await userEvent.click(minimized);
+  await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  await waitFor(() => expect(service.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+    start_at_login: true, start_minimized: true,
+  })));
+});
+
+it("reports startup-registration failures instead of displaying an enabled preference", async () => {
+  const { service } = api({ ...initial, startup: { enabled: null, error: { code: "startup_unavailable", message: "Login registration could not be read." } } });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
+  expect(screen.getByRole("checkbox", { name: "Start at login" })).toHaveProperty("disabled", true);
+  expect(screen.getByText("Login registration could not be read.")).toBeTruthy();
 });
 
 it("restores the saved background preference and routes explicit Quit through the native bridge", async () => {

@@ -25,12 +25,16 @@ export interface DownloadSettings {
   download_limit_kib: number;
   upload_limit_kib: number;
   continue_in_background: boolean;
+  start_at_login: boolean;
+  start_minimized: boolean;
 }
 export interface SettingsUpdate {
   destination_id: string | null;
   download_limit_kib: number;
   upload_limit_kib: number;
   continue_in_background: boolean;
+  start_at_login: boolean;
+  start_minimized: boolean;
 }
 export interface Snapshot {
   revision: number;
@@ -41,6 +45,7 @@ export interface Snapshot {
   error: CommandError | null;
   tray_available: boolean;
   background_error: CommandError | null;
+  startup: { enabled: boolean | null; error: CommandError | null };
 }
 export interface Selection {
   id: string;

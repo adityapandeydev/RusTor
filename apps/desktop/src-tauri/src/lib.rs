@@ -2,6 +2,7 @@ mod lifecycle;
 mod search;
 mod service;
 mod settings;
+mod startup;
 
 use service::{
     AddSource, AppSnapshot, CommandError, DesktopState, PreparedSelection, SaveSettingsRequest,
@@ -163,7 +164,19 @@ async fn cancel_search(
 }
 
 pub fn run() {
+    let login_launch = startup::is_login_launch(&std::env::args().collect::<Vec<_>>());
+    let autostart = tauri_plugin_autostart::Builder::new().arg(startup::LOGIN_ARGUMENT);
+    let autostart = autostart.app_name(startup::ENTRY_NAME);
     let app = tauri::Builder::default()
+        // Must run before other plugins: the second process never opens an engine.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !startup::is_login_launch(&args)
+                && let Err(error) = lifecycle::show(app)
+            {
+                lifecycle::report(app, CommandError::new("window_unavailable", error.to_string()));
+            }
+        }))
+        .plugin(autostart.build())
         .manage(lifecycle::Lifecycle::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -183,7 +196,7 @@ pub fn run() {
             cancel_search,
             quit_app
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let download_dir = app.path().download_dir()?.join("RusTor");
             let state_dir = app.path().app_local_data_dir()?.join("engine");
             // Development smoke tests can isolate state from the normal app profile.
@@ -192,10 +205,10 @@ pub fn run() {
             let state_dir = std::env::var_os("RUSTOR_DEV_STATE_DIR")
                 .map(std::path::PathBuf::from)
                 .unwrap_or(state_dir);
-            let state = Arc::new(DesktopState::new(rustor_torrent::EngineConfig::new(
+            let state = Arc::new(DesktopState::with_startup(rustor_torrent::EngineConfig::new(
                 download_dir,
                 state_dir,
-            )));
+            ), Arc::new(startup::NativeRegistration::new(app.handle().clone()))));
             app.manage(state.clone());
             app.manage(search::DesktopSearch::new());
             match lifecycle::setup_tray(app.handle()) {
@@ -203,9 +216,29 @@ pub fn run() {
                 Err(error) => lifecycle::report(app.handle(), CommandError::new("tray_unavailable", format!(
                     "The system tray could not be started ({error}). Closing RusTor will quit; keep the window open to continue transfers."))),
             }
+            if !login_launch {
+                lifecycle::show(app.handle())?;
+            }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 state.initialize().await;
+                if login_launch {
+                    let snapshot = state.snapshot().await;
+                    let minimize = startup::should_minimize(
+                        true, snapshot.startup.enabled == Some(true), snapshot.settings.start_minimized,
+                        snapshot.tray_available, handle.state::<lifecycle::Lifecycle>().foreground_requested(),
+                        matches!(snapshot.phase, service::EnginePhase::Ready),
+                    );
+                    if minimize {
+                        #[cfg(target_os = "linux")]
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.minimize();
+                        }
+                    } else if let Err(error) = lifecycle::show(&handle) {
+                        lifecycle::report(&handle, CommandError::new("window_unavailable", error.to_string()));
+                    }
+                }
                 while !state.stopping.load(Ordering::Acquire) {
                     let _ = handle.emit("torrent-snapshot", state.snapshot().await);
                     tokio::time::sleep(Duration::from_millis(500)).await;

@@ -16,6 +16,10 @@ pub struct DownloadSettings {
     pub upload_limit_kib: u32,
     #[serde(default)]
     pub continue_in_background: bool,
+    #[serde(default)]
+    pub start_at_login: bool,
+    #[serde(default)]
+    pub start_minimized: bool,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -31,6 +35,8 @@ impl DownloadSettings {
             download_limit_kib: 0,
             upload_limit_kib: 0,
             continue_in_background: false,
+            start_at_login: false,
+            start_minimized: false,
         }
     }
     pub fn limits(&self) -> Result<rustor_torrent::SpeedLimits, CommandError> {
@@ -129,6 +135,8 @@ mod tests {
         let mut saved = defaults.clone();
         saved.download_limit_kib = 128;
         saved.continue_in_background = true;
+        saved.start_at_login = true;
+        saved.start_minimized = true;
         saved.save(path.clone()).await.unwrap();
         assert_eq!(
             DownloadSettings::load(&path, defaults.clone())
@@ -177,6 +185,8 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("continue_in_background");
+        legacy.as_object_mut().unwrap().remove("start_at_login");
+        legacy.as_object_mut().unwrap().remove("start_minimized");
         legacy["download_limit_kib"] = 64.into();
         tokio::fs::write(
             &path,
@@ -191,6 +201,8 @@ mod tests {
         .await
         .unwrap();
         assert!(!loaded.continue_in_background);
+        assert!(!loaded.start_at_login);
+        assert!(!loaded.start_minimized);
         assert_eq!(loaded.download_limit_kib, 64);
         assert_eq!(loaded.default_destination, root.path().join("downloads"));
     }

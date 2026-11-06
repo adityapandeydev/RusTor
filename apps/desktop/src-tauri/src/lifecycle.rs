@@ -16,9 +16,13 @@ use tauri::{
 pub struct Lifecycle {
     quitting: AtomicBool,
     complete: AtomicBool,
+    foreground_requested: AtomicBool,
 }
 
 impl Lifecycle {
+    pub fn foreground_requested(&self) -> bool {
+        self.foreground_requested.load(Ordering::Acquire)
+    }
     pub fn complete(&self) -> bool {
         self.complete.load(Ordering::Acquire)
     }
@@ -51,6 +55,9 @@ pub fn quit(app: &tauri::AppHandle) {
 }
 
 pub fn show(app: &tauri::AppHandle) -> tauri::Result<()> {
+    app.state::<Lifecycle>()
+        .foreground_requested
+        .store(true, Ordering::Release);
     if let Some(window) = app.get_webview_window("main") {
         window.show()?;
         window.unminimize()?;

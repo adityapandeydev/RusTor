@@ -85,6 +85,7 @@ pub struct AppSnapshot {
     pub error: Option<CommandError>,
     pub tray_available: bool,
     pub background_error: Option<CommandError>,
+    pub startup: crate::startup::Status,
 }
 
 #[derive(Serialize)]
@@ -123,6 +124,10 @@ pub struct SaveSettingsRequest {
     pub upload_limit_kib: u32,
     #[serde(default)]
     pub continue_in_background: bool,
+    #[serde(default)]
+    pub start_at_login: bool,
+    #[serde(default)]
+    pub start_minimized: bool,
 }
 
 #[derive(Default)]
@@ -213,10 +218,19 @@ pub struct DesktopState {
     settings: Mutex<DownloadSettings>,
     settings_path: PathBuf,
     revision: AtomicU64,
+    startup_registration: Arc<dyn crate::startup::Registration>,
 }
 
 impl DesktopState {
+    #[cfg(test)]
     pub fn new(config: EngineConfig) -> Self {
+        Self::with_startup(config, Arc::new(crate::startup::UnavailableRegistration))
+    }
+
+    pub fn with_startup(
+        config: EngineConfig,
+        startup_registration: Arc<dyn crate::startup::Registration>,
+    ) -> Self {
         Self {
             settings: Mutex::new(DownloadSettings::defaults(config.download_dir.clone())),
             settings_path: config.state_dir.join("settings.json"),
@@ -229,6 +243,7 @@ impl DesktopState {
             config: Mutex::new(Some(config)),
             selections: Mutex::new(Selections::default()),
             revision: AtomicU64::new(0),
+            startup_registration,
         }
     }
 
@@ -291,6 +306,7 @@ impl DesktopState {
             settings,
             tray_available: self.tray_available.load(Ordering::Acquire),
             background_error: self.background_error.lock().await.clone(),
+            startup: crate::startup::status(self.startup_registration.as_ref()),
         }
     }
 
@@ -304,6 +320,15 @@ impl DesktopState {
             return Err(CommandError::new(
                 "tray_unavailable",
                 "The system tray is unavailable. Keep RusTor open to continue transfers.",
+            ));
+        }
+        if request.start_at_login
+            && request.start_minimized
+            && !self.tray_available.load(Ordering::Acquire)
+        {
+            return Err(CommandError::new(
+                "tray_unavailable",
+                "Start minimized requires an available system tray. Start with the window visible instead.",
             ));
         }
         let destination = match request.destination_id {
@@ -328,10 +353,23 @@ impl DesktopState {
             download_limit_kib: request.download_limit_kib,
             upload_limit_kib: request.upload_limit_kib,
             continue_in_background: request.continue_in_background,
+            start_at_login: request.start_at_login,
+            start_minimized: request.start_minimized,
         };
         let limits = settings.limits()?;
         // A failed write leaves both committed preferences and active limits intact.
-        settings.save(self.settings_path.clone()).await?;
+        let previous = crate::startup::apply(
+            self.startup_registration.as_ref(),
+            settings.start_at_login,
+            current.start_at_login,
+        )?;
+        if let Err(error) = settings.save(self.settings_path.clone()).await {
+            return Err(crate::startup::rollback(
+                self.startup_registration.as_ref(),
+                previous,
+                error,
+            ));
+        }
         engine.set_speed_limits(limits).await?;
         *current = settings;
         self.continue_in_background
@@ -541,6 +579,54 @@ fn bulk_target(state: rustor_torrent::TorrentState, pause: bool) -> bool {
 mod tests {
     use super::*;
 
+    struct MemoryRegistration(AtomicBool);
+    impl crate::startup::Registration for MemoryRegistration {
+        fn enabled(&self) -> Result<bool, CommandError> {
+            Ok(self.0.load(Ordering::Acquire))
+        }
+        fn set_enabled(&self, enabled: bool) -> Result<(), CommandError> {
+            self.0.store(enabled, Ordering::Release);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn startup_registration_and_settings_rollback_keep_the_actual_os_state_visible() {
+        let root = tempfile::tempdir().unwrap();
+        let mut config =
+            EngineConfig::new(root.path().join("downloads"), root.path().join("state"));
+        config.discovery = false;
+        let registration = Arc::new(MemoryRegistration(AtomicBool::new(false)));
+        let mut state = DesktopState::with_startup(config, registration.clone());
+        state.tray_available.store(true, Ordering::Release);
+        state.initialize().await;
+        let request = || SaveSettingsRequest {
+            destination_id: None,
+            download_limit_kib: 0,
+            upload_limit_kib: 0,
+            continue_in_background: false,
+            start_at_login: true,
+            start_minimized: true,
+        };
+        let saved = state.save_settings(request()).await.unwrap();
+        assert_eq!(saved.startup.enabled, Some(true));
+        assert!(saved.settings.start_minimized);
+        let committed_path = state.settings_path.clone();
+        let committed = tokio::fs::read(&committed_path).await.unwrap();
+        registration.0.store(false, Ordering::Release);
+        assert_eq!(state.snapshot().await.startup.enabled, Some(false));
+        state.settings_path = root.path().join("missing/settings.json");
+        assert_eq!(
+            state.save_settings(request()).await.err().unwrap().code,
+            "settings_not_saved"
+        );
+        assert!(!registration.0.load(Ordering::Acquire));
+        assert_eq!(state.snapshot().await.settings, saved.settings);
+        assert_eq!(tokio::fs::read(committed_path).await.unwrap(), committed);
+        state.shutdown().await;
+        assert!(!registration.0.load(Ordering::Acquire));
+    }
+
     #[test]
     fn recovery_errors_explain_active_state_and_preserve_recovery_guidance() {
         let error = CommandError::from(rustor_torrent::Error::SessionNotSaved);
@@ -585,6 +671,8 @@ mod tests {
                     download_limit_kib: 0,
                     upload_limit_kib: 0,
                     continue_in_background: true,
+                    start_at_login: false,
+                    start_minimized: false,
                 })
                 .await
                 .err()
@@ -671,6 +759,8 @@ mod tests {
                 download_limit_kib: 64,
                 upload_limit_kib: 32,
                 continue_in_background: true,
+                start_at_login: false,
+                start_minimized: false,
             })
             .await
             .unwrap();
@@ -691,6 +781,8 @@ mod tests {
                     download_limit_kib: 1,
                     upload_limit_kib: 0,
                     continue_in_background: false,
+                    start_at_login: false,
+                    start_minimized: false,
                 })
                 .await
                 .is_err()
@@ -712,6 +804,8 @@ mod tests {
                     download_limit_kib: 256,
                     upload_limit_kib: 128,
                     continue_in_background: false,
+                    start_at_login: false,
+                    start_minimized: false,
                 })
                 .await
                 .is_err()
@@ -903,6 +997,8 @@ mod tests {
                 download_limit_kib: 0,
                 upload_limit_kib: 0,
                 continue_in_background: false,
+                start_at_login: false,
+                start_minimized: false,
             })
             .await
             .unwrap();

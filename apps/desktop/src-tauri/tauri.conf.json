@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "RusTor", "width": 1180, "height": 780, "minWidth": 720, "minHeight": 560, "backgroundColor": "#0b3048" }],
+    "windows": [{ "label": "main", "title": "RusTor", "visible": false, "width": 1180, "height": 780, "minWidth": 720, "minHeight": 560, "backgroundColor": "#0b3048" }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost",
       "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:4173 ws://127.0.0.1:4173"
@@ -29,7 +29,7 @@
     "resources": { "../../../LICENSE": "LICENSE", "../../../README.md": "README.md" },
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
-      "nsis": { "installMode": "currentUser", "installerIcon": "icons/icon.ico" }
+      "nsis": { "installMode": "currentUser", "installerIcon": "icons/icon.ico", "installerHooks": "windows/hooks.nsh" }
     }
   }
 }
