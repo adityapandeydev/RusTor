@@ -293,13 +293,13 @@ pub fn run() {
             lifecycle::quit(app);
         }
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Reopen { .. } = event {
-            if let Err(error) = lifecycle::show(app) {
-                lifecycle::report(
-                    app,
-                    CommandError::new("window_unavailable", error.to_string()),
-                );
-            }
+        if let tauri::RunEvent::Reopen { .. } = event
+            && let Err(error) = lifecycle::show(app)
+        {
+            lifecycle::report(
+                app,
+                CommandError::new("window_unavailable", error.to_string()),
+            );
         }
     });
 }
