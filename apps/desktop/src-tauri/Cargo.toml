@@ -13,7 +13,7 @@ name = "rustor_desktop_lib"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "=2.12.5", features = [] }
+tauri = { version = "=2.12.5", features = ["tray-icon"] }
 tauri-plugin-dialog = "=2.8.4"
 rustor-torrent = { path = "../../../crates/rustor-torrent" }
 rustor-search = { path = "../../../crates/rustor-search" }

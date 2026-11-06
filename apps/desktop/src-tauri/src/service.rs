@@ -83,6 +83,8 @@ pub struct AppSnapshot {
     pub default_destination: String,
     pub settings: DownloadSettings,
     pub error: Option<CommandError>,
+    pub tray_available: bool,
+    pub background_error: Option<CommandError>,
 }
 
 #[derive(Serialize)]
@@ -119,6 +121,8 @@ pub struct SaveSettingsRequest {
     pub destination_id: Option<String>,
     pub download_limit_kib: u32,
     pub upload_limit_kib: u32,
+    #[serde(default)]
+    pub continue_in_background: bool,
 }
 
 #[derive(Default)]
@@ -199,6 +203,10 @@ impl Selections {
 
 pub struct DesktopState {
     pub stopping: AtomicBool,
+    pub tray_available: AtomicBool,
+    pub continue_in_background: AtomicBool,
+    background_error: Mutex<Option<CommandError>>,
+    bulk_action: Mutex<()>,
     engine: OnceCell<Result<Engine, CommandError>>,
     config: Mutex<Option<EngineConfig>>,
     selections: Mutex<Selections>,
@@ -213,6 +221,10 @@ impl DesktopState {
             settings: Mutex::new(DownloadSettings::defaults(config.download_dir.clone())),
             settings_path: config.state_dir.join("settings.json"),
             stopping: AtomicBool::new(false),
+            tray_available: AtomicBool::new(false),
+            continue_in_background: AtomicBool::new(false),
+            background_error: Mutex::new(None),
+            bulk_action: Mutex::new(()),
             engine: OnceCell::new(),
             config: Mutex::new(Some(config)),
             selections: Mutex::new(Selections::default()),
@@ -241,6 +253,8 @@ impl DesktopState {
                 config.download_limit_bps = limits.download_bps;
                 config.upload_limit_bps = limits.upload_bps;
                 let engine = Engine::open(config).await.map_err(CommandError::from)?;
+                self.continue_in_background
+                    .store(saved.continue_in_background, Ordering::Release);
                 *self.settings.lock().await = saved;
                 Ok(engine)
             })
@@ -275,6 +289,8 @@ impl DesktopState {
             error,
             default_destination: settings.default_destination.to_string_lossy().into_owned(),
             settings,
+            tray_available: self.tray_available.load(Ordering::Acquire),
+            background_error: self.background_error.lock().await.clone(),
         }
     }
 
@@ -284,6 +300,12 @@ impl DesktopState {
     ) -> Result<AppSnapshot, CommandError> {
         let mut current = self.settings.lock().await;
         let engine = self.engine()?;
+        if request.continue_in_background && !self.tray_available.load(Ordering::Acquire) {
+            return Err(CommandError::new(
+                "tray_unavailable",
+                "The system tray is unavailable. Keep RusTor open to continue transfers.",
+            ));
+        }
         let destination = match request.destination_id {
             Some(id) => {
                 let path = self.selections.lock().await.find(&id, true)?;
@@ -305,12 +327,15 @@ impl DesktopState {
             default_destination: destination,
             download_limit_kib: request.download_limit_kib,
             upload_limit_kib: request.upload_limit_kib,
+            continue_in_background: request.continue_in_background,
         };
         let limits = settings.limits()?;
         // A failed write leaves both committed preferences and active limits intact.
         settings.save(self.settings_path.clone()).await?;
         engine.set_speed_limits(limits).await?;
         *current = settings;
+        self.continue_in_background
+            .store(current.continue_in_background, Ordering::Release);
         drop(current);
         Ok(self.snapshot().await)
     }
@@ -457,6 +482,59 @@ impl DesktopState {
             let _ = engine.shutdown().await;
         }
     }
+
+    pub async fn report_background_error(&self, error: CommandError) {
+        *self.background_error.lock().await = Some(error);
+    }
+
+    pub async fn control_all(&self, pause: bool) -> Result<(), CommandError> {
+        let _guard = self.bulk_action.try_lock().map_err(|_| {
+            CommandError::new(
+                "tray_busy",
+                "Another tray action is still running. Wait a moment and try again.",
+            )
+        })?;
+        let engine = self.engine()?;
+        let torrents = engine.list().await.map_err(CommandError::from)?;
+        let mut changed = 0;
+        let mut failures = Vec::new();
+        for torrent in torrents {
+            if !bulk_target(torrent.state, pause) {
+                continue;
+            }
+            let result = if pause {
+                self.pause(torrent.id.as_str()).await
+            } else {
+                self.resume(torrent.id.as_str()).await
+            };
+            match result {
+                Ok(()) => changed += 1,
+                Err(error) => failures.push(error),
+            }
+        }
+        if let Some(first) = failures.first() {
+            return Err(CommandError::new(
+                "tray_action_failed",
+                format!(
+                    "{} all: {changed} transfers updated; {} failed. {}",
+                    if pause { "Pause" } else { "Resume" },
+                    failures.len(),
+                    first.message
+                ),
+            ));
+        }
+        *self.background_error.lock().await = None;
+        Ok(())
+    }
+}
+
+fn bulk_target(state: rustor_torrent::TorrentState, pause: bool) -> bool {
+    use rustor_torrent::TorrentState::*;
+    if pause {
+        matches!(state, Checking | Downloading | Seeding)
+    } else {
+        state == Paused
+    }
 }
 
 #[cfg(test)]
@@ -476,6 +554,60 @@ mod tests {
                 .message
                 .contains("Keep the saved session and payload files")
         );
+    }
+
+    #[test]
+    fn tray_bulk_controls_do_not_retry_failures_or_resume_already_running_transfers() {
+        use rustor_torrent::TorrentState::*;
+        for state in [Checking, Downloading, Seeding] {
+            assert!(bulk_target(state, true));
+            assert!(!bulk_target(state, false));
+        }
+        assert!(!bulk_target(Paused, true));
+        assert!(bulk_target(Paused, false));
+        assert!(!bulk_target(Failed, true));
+        assert!(!bulk_target(Failed, false));
+    }
+
+    #[tokio::test]
+    async fn unavailable_tray_rejects_background_mode_and_bulk_actions_are_serialized() {
+        let root = tempfile::tempdir().unwrap();
+        let mut config =
+            EngineConfig::new(root.path().join("downloads"), root.path().join("state"));
+        config.discovery = false;
+        let state = DesktopState::new(config);
+        assert_eq!(state.control_all(true).await.unwrap_err().code, "starting");
+        state.initialize().await;
+        assert_eq!(
+            state
+                .save_settings(SaveSettingsRequest {
+                    destination_id: None,
+                    download_limit_kib: 0,
+                    upload_limit_kib: 0,
+                    continue_in_background: true,
+                })
+                .await
+                .err()
+                .unwrap()
+                .code,
+            "tray_unavailable"
+        );
+        assert!(!state.continue_in_background.load(Ordering::Acquire));
+        assert!(!state.settings_path.exists());
+        let guard = state.bulk_action.lock().await;
+        assert_eq!(state.control_all(true).await.unwrap_err().code, "tray_busy");
+        drop(guard);
+        state
+            .report_background_error(CommandError::new("test", "visible failure"))
+            .await;
+        assert_eq!(
+            state.snapshot().await.background_error.unwrap().message,
+            "visible failure"
+        );
+        state.control_all(true).await.unwrap();
+        assert!(state.snapshot().await.background_error.is_none());
+        state.shutdown().await;
+        assert_eq!(state.control_all(false).await.unwrap_err().code, "stopped");
     }
 
     #[test]
@@ -530,6 +662,7 @@ mod tests {
             config
         };
         let mut state = DesktopState::new(make_config());
+        state.tray_available.store(true, Ordering::Release);
         state.initialize().await;
         let folder = state.select(destination.clone(), true).await.unwrap();
         let saved = state
@@ -537,6 +670,7 @@ mod tests {
                 destination_id: Some(folder.id),
                 download_limit_kib: 64,
                 upload_limit_kib: 32,
+                continue_in_background: true,
             })
             .await
             .unwrap();
@@ -555,7 +689,8 @@ mod tests {
                 .save_settings(SaveSettingsRequest {
                     destination_id: None,
                     download_limit_kib: 1,
-                    upload_limit_kib: 0
+                    upload_limit_kib: 0,
+                    continue_in_background: false,
                 })
                 .await
                 .is_err()
@@ -575,12 +710,14 @@ mod tests {
                 .save_settings(SaveSettingsRequest {
                     destination_id: None,
                     download_limit_kib: 256,
-                    upload_limit_kib: 128
+                    upload_limit_kib: 128,
+                    continue_in_background: false,
                 })
                 .await
                 .is_err()
         );
         assert_eq!(state.snapshot().await.settings, saved.settings);
+        assert!(state.continue_in_background.load(Ordering::Acquire));
         assert_eq!(
             state.engine().unwrap().speed_limits().await.unwrap(),
             saved.settings.limits().unwrap()
@@ -590,6 +727,7 @@ mod tests {
         state.shutdown().await;
         let restored = DesktopState::new(make_config());
         restored.initialize().await;
+        assert!(restored.continue_in_background.load(Ordering::Acquire));
         assert_eq!(restored.snapshot().await.settings, saved.settings);
         assert_eq!(
             restored.engine().unwrap().speed_limits().await.unwrap(),
@@ -750,12 +888,12 @@ mod tests {
                 .unwrap(),
             data
         );
-        state.pause(added.id.as_str()).await.unwrap();
+        state.control_all(true).await.unwrap();
         assert_eq!(
             state.snapshot().await.torrents[0].state,
             rustor_torrent::TorrentState::Paused
         );
-        state.resume(added.id.as_str()).await.unwrap();
+        state.control_all(false).await.unwrap();
         let future_folder = root.path().join("future-downloads");
         tokio::fs::create_dir_all(&future_folder).await.unwrap();
         let future_selection = state.select(future_folder.clone(), true).await.unwrap();
@@ -764,6 +902,7 @@ mod tests {
                 destination_id: Some(future_selection.id),
                 download_limit_kib: 0,
                 upload_limit_kib: 0,
+                continue_in_background: false,
             })
             .await
             .unwrap();

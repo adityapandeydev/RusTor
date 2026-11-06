@@ -421,6 +421,7 @@ export default function App({
           <DownloadSettingsPanel
             api={api}
             settings={snapshot.settings}
+            trayAvailable={snapshot.tray_available}
             onClose={closeSettings}
             onSaved={(next) => {
               accept(next);
@@ -430,6 +431,11 @@ export default function App({
               );
             }}
           />
+        )}
+        {snapshot?.background_error && (
+          <div className="error background-error" role="alert">
+            {snapshot.background_error.message}
+          </div>
         )}
         <div className="page-body" hidden={view !== "discover"}>
           <Discover

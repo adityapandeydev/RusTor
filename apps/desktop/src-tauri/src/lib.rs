@@ -1,3 +1,4 @@
+mod lifecycle;
 mod search;
 mod service;
 mod settings;
@@ -163,6 +164,7 @@ async fn cancel_search(
 
 pub fn run() {
     let app = tauri::Builder::default()
+        .manage(lifecycle::Lifecycle::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_snapshot,
@@ -178,7 +180,8 @@ pub fn run() {
             save_settings,
             start_search,
             get_search_snapshot,
-            cancel_search
+            cancel_search,
+            quit_app
         ])
         .setup(|app| {
             let download_dir = app.path().download_dir()?.join("RusTor");
@@ -195,6 +198,11 @@ pub fn run() {
             )));
             app.manage(state.clone());
             app.manage(search::DesktopSearch::new());
+            match lifecycle::setup_tray(app.handle()) {
+                Ok(()) => state.tray_available.store(true, Ordering::Release),
+                Err(error) => lifecycle::report(app.handle(), CommandError::new("tray_unavailable", format!(
+                    "The system tray could not be started ({error}). Closing RusTor will quit; keep the window open to continue transfers."))),
+            }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 state.initialize().await;
@@ -205,22 +213,49 @@ pub fn run() {
             });
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if window.label() == "main" && let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let app = window.app_handle();
+                let state = app.state::<Arc<DesktopState>>();
+                if app.state::<lifecycle::Lifecycle>().should_background(&state) {
+                    // Linux desktops can lack a visible status notifier even when creation succeeds.
+                    // Keep a taskbar entry there as a recovery path.
+                    #[cfg(target_os = "linux")]
+                    let result = window.minimize();
+                    #[cfg(not(target_os = "linux"))]
+                    let result = window.hide();
+                    if let Err(error) = result {
+                        lifecycle::report(app, CommandError::new("window_unavailable", format!(
+                            "Could not move RusTor to the background ({error}). The app is still running; use Quit RusTor to exit.")));
+                    }
+                } else {
+                    lifecycle::quit(app);
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("Could not start the RusTor desktop application");
     app.run(|app, event| {
-        if let tauri::RunEvent::ExitRequested { api, code, .. } = event
-            && code.is_none()
+        if let tauri::RunEvent::ExitRequested { api, .. } = &event
+            && !app.state::<lifecycle::Lifecycle>().complete()
         {
             api.prevent_exit();
-            let state = app.state::<Arc<DesktopState>>().inner().clone();
-            if !state.stopping.swap(true, Ordering::AcqRel) {
-                let app = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    app.state::<search::DesktopSearch>().shutdown().await;
-                    state.shutdown().await;
-                    app.exit(0);
-                });
+            lifecycle::quit(app);
+        }
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            if let Err(error) = lifecycle::show(app) {
+                lifecycle::report(
+                    app,
+                    CommandError::new("window_unavailable", error.to_string()),
+                );
             }
         }
     });
+}
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    lifecycle::quit(&app);
 }

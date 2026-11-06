@@ -979,6 +979,27 @@ progress::-moz-progress-bar {
   margin-top: 20px;
   border-top: 1px solid var(--line);
 }
+.settings-background {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.settings-background label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.settings-background input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--primary);
+}
+.settings-actions .quit-app { margin-right: auto; }
+.background-error { margin-top: 20px; }
 .settings-toggle {
   width: 36px;
   height: 36px;

@@ -24,11 +24,13 @@ export interface DownloadSettings {
   default_destination: string;
   download_limit_kib: number;
   upload_limit_kib: number;
+  continue_in_background: boolean;
 }
 export interface SettingsUpdate {
   destination_id: string | null;
   download_limit_kib: number;
   upload_limit_kib: number;
+  continue_in_background: boolean;
 }
 export interface Snapshot {
   revision: number;
@@ -37,6 +39,8 @@ export interface Snapshot {
   default_destination: string;
   settings: DownloadSettings;
   error: CommandError | null;
+  tray_available: boolean;
+  background_error: CommandError | null;
 }
 export interface Selection {
   id: string;
@@ -73,6 +77,7 @@ export interface DesktopApi {
   remove(id: string): Promise<void>;
   retry(id: string): Promise<void>;
   saveSettings(update: SettingsUpdate): Promise<Snapshot>;
+  quit(): Promise<void>;
 }
 
 export const desktop: DesktopApi = {
@@ -97,6 +102,7 @@ export const desktop: DesktopApi = {
   remove: (id) => invoke("remove_torrent", { id }),
   retry: (id) => invoke("retry_torrent", { id }),
   saveSettings: (request) => invoke("save_settings", { request }),
+  quit: () => invoke("quit_app"),
 };
 
 export function errorMessage(error: unknown): string {

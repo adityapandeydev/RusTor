@@ -17,8 +17,11 @@ const initial: Snapshot = {
     default_destination: "C:/Downloads/RusTor",
     download_limit_kib: 0,
     upload_limit_kib: 0,
+    continue_in_background: false,
   },
   error: null,
+  tray_available: true,
+  background_error: null,
 };
 function api(snapshot = initial) {
   let receive: (snapshot: Snapshot) => void = () => {};
@@ -49,6 +52,7 @@ function api(snapshot = initial) {
     remove: vi.fn().mockResolvedValue(undefined),
     retry: vi.fn().mockResolvedValue(undefined),
     saveSettings: vi.fn().mockResolvedValue({ ...initial, revision: 2 }),
+    quit: vi.fn().mockResolvedValue(undefined),
   };
   return { service, emit: (value: Snapshot) => receive(value), unsubscribe };
 }
@@ -378,6 +382,7 @@ it("saves native folder handles and session limits from the download settings pa
       default_destination: "D:/Saved downloads",
       download_limit_kib: 128,
       upload_limit_kib: 64,
+      continue_in_background: false,
     },
   });
   render(<App api={service} />);
@@ -397,6 +402,7 @@ it("saves native folder handles and session limits from the download settings pa
       destination_id: "folder-settings",
       download_limit_kib: 128,
       upload_limit_kib: 64,
+      continue_in_background: false,
     }),
   );
   expect(screen.getByRole("status").textContent).toContain("Settings saved");
@@ -408,6 +414,46 @@ it("saves native folder handles and session limits from the download settings pa
     "value",
     "128",
   );
+});
+
+it("persists an explicit close-to-tray choice with the download settings", async () => {
+  const { service } = api({ ...initial, tray_available: true });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
+  const checkbox = screen.getByRole("checkbox", { name: "Continue running when closed" });
+  expect(checkbox).toHaveProperty("checked", false);
+  await userEvent.click(checkbox);
+  await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+  await waitFor(() => expect(service.saveSettings).toHaveBeenCalledWith({
+    destination_id: null, download_limit_kib: 0, upload_limit_kib: 0,
+    continue_in_background: true,
+  }));
+});
+
+it("keeps background mode unavailable when there is no native tray", async () => {
+  const { service } = api({ ...initial, tray_available: false });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
+  expect(screen.getByRole("checkbox", { name: "Continue running when closed" })).toHaveProperty("disabled", true);
+  expect(screen.getByText(/tray is unavailable/i)).toBeTruthy();
+});
+
+it("restores the saved background preference and routes explicit Quit through the native bridge", async () => {
+  const { service } = api({ ...initial, settings: { ...initial.settings, continue_in_background: true } });
+  vi.mocked(service.quit).mockRejectedValue({ message: "Could not request shutdown. Try again." });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: "Download settings" }));
+  expect(screen.getByRole("checkbox", { name: "Continue running when closed" })).toHaveProperty("checked", true);
+  await userEvent.click(screen.getByRole("button", { name: "Quit RusTor" }));
+  expect(service.quit).toHaveBeenCalledOnce();
+  expect((await screen.findByRole("alert")).textContent).toContain("Could not request shutdown");
+});
+
+it("shows tray action failures even while browsing Discover", async () => {
+  const { service } = api({ ...initial, background_error: { code: "tray_action_failed", message: "Pause all: one transfer could not be paused." } });
+  render(<App api={service} />);
+  await userEvent.click(await screen.findByRole("button", { name: /Discover/ }));
+  expect(screen.getByRole("alert").textContent).toContain("one transfer could not be paused");
 });
 
 it("rejects limits below one chunk and cancels settings without saving", async () => {

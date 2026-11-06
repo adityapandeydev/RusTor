@@ -14,6 +14,8 @@ pub struct DownloadSettings {
     pub default_destination: PathBuf,
     pub download_limit_kib: u32,
     pub upload_limit_kib: u32,
+    #[serde(default)]
+    pub continue_in_background: bool,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -28,6 +30,7 @@ impl DownloadSettings {
             default_destination: destination,
             download_limit_kib: 0,
             upload_limit_kib: 0,
+            continue_in_background: false,
         }
     }
     pub fn limits(&self) -> Result<rustor_torrent::SpeedLimits, CommandError> {
@@ -125,6 +128,7 @@ mod tests {
         );
         let mut saved = defaults.clone();
         saved.download_limit_kib = 128;
+        saved.continue_in_background = true;
         saved.save(path.clone()).await.unwrap();
         assert_eq!(
             DownloadSettings::load(&path, defaults.clone())
@@ -161,6 +165,34 @@ mod tests {
             .is_err()
         );
         assert_eq!(tokio::fs::read(&path).await.unwrap(), b"broken json");
+    }
+    #[tokio::test]
+    async fn existing_settings_default_to_normal_close_without_losing_limits() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("settings.json");
+        let mut legacy =
+            serde_json::to_value(DownloadSettings::defaults(root.path().join("downloads")))
+                .unwrap();
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("continue_in_background");
+        legacy["download_limit_kib"] = 64.into();
+        tokio::fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({"version":1,"settings":legacy})).unwrap(),
+        )
+        .await
+        .unwrap();
+        let loaded = DownloadSettings::load(
+            &path,
+            DownloadSettings::defaults(root.path().join("fallback")),
+        )
+        .await
+        .unwrap();
+        assert!(!loaded.continue_in_background);
+        assert_eq!(loaded.download_limit_kib, 64);
+        assert_eq!(loaded.default_destination, root.path().join("downloads"));
     }
     #[test]
     fn rate_boundaries_are_checked_before_conversion() {
