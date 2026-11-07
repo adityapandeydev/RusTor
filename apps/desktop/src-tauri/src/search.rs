@@ -101,6 +101,15 @@ impl DesktopSearch {
         }
         false
     }
+    pub async fn artwork_result(&self, hash: &str) -> Option<rustor_search::SearchResult> {
+        let active = self.active.lock().await;
+        let snapshot = active.as_ref()?.snapshot();
+        snapshot
+            .results
+            .iter()
+            .find(|row| row.info_hash.as_str() == hash)
+            .cloned()
+    }
     pub async fn shutdown(&self) {
         let mut active = self.active.lock().await;
         self.stopped.store(true, Ordering::Release);

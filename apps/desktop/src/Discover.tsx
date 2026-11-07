@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { errorMessage } from "./bridge";
 import { bytes } from "./format";
+import { Artwork } from "./Artwork";
 import type {
   SearchApi,
   SearchCategory,
@@ -331,20 +332,23 @@ export function Discover({
                   .slice(currentPage * 25, currentPage * 25 + 25)
                   .map((row) => (
                     <article className="search-result" key={row.info_hash}>
-                      <div className="result-identity">
-                        <h2>
-                          <bdi>{row.name}</bdi>
-                        </h2>
-                        <p>
-                          {row.providers.join(" · ")}
-                          <span>·</span>
-                          {row.added_unix_ms === null
-                            ? "Date unavailable"
-                            : new Date(row.added_unix_ms).toLocaleDateString()}
-                          {row.trackers_truncated
-                            ? " · Tracker list limited"
-                            : ""}
-                        </p>
+                      <div className="result-with-artwork">
+                        <Artwork infoHash={row.info_hash} />
+                        <div className="result-identity">
+                          <h2>
+                            <bdi>{row.name}</bdi>
+                          </h2>
+                          <p>
+                            {row.providers.join(" · ")}
+                            <span>·</span>
+                            {row.added_unix_ms === null
+                              ? "Date unavailable"
+                              : new Date(row.added_unix_ms).toLocaleDateString()}
+                            {row.trackers_truncated
+                              ? " · Tracker list limited"
+                              : ""}
+                          </p>
+                        </div>
                       </div>
                       <span className="result-size">
                         {row.size_bytes === null
@@ -408,6 +412,7 @@ export function Discover({
                   </div>
                 </div>
               )}
+              <p className="provider-status">Artwork metadata: IMDb · TVmaze (CC BY-SA).</p>
             </>
           ) : (
             <div className="discover-empty">

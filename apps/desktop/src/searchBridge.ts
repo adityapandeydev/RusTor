@@ -5,6 +5,7 @@ export interface SearchResult {
   info_hash: string;
   name: string;
   magnet: string;
+  artwork_url?: string | null;
   size_bytes: number | null;
   seeders: number | null;
   leechers: number | null;

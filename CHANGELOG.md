@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 (unreleased)
+
+- Provider artwork in Discover and Downloads, with lazy loading and a local thumbnail cache.
+- Keep the current list layout, theme, sorting and transfer controls. Missing artwork uses a file placeholder.
+- Fetch only approved provider image origins through Rust; reject redirects, oversized images and unsupported formats. No additional API account is needed.
+- Fill missing movie, TV and anime covers using exact metadata matches; cache lookup results, coalesce episodes/qualities and throttle requests. Fix support for current YTS image URLs.
+
 ## 0.2.0
 
 ### Added

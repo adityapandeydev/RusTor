@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Discover } from "./Discover";
+import { invoke } from "@tauri-apps/api/core";
+vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true, invoke: vi.fn().mockResolvedValue(null) }));
 import type { SearchApi, SearchResult, SearchSnapshot } from "./searchBridge";
 afterEach(cleanup);
 const row: SearchResult = {
@@ -30,6 +32,13 @@ const done: SearchSnapshot = {
   partial: false,
   truncated: false,
 };
+it("requests native metadata fallback even when a provider supplies no artwork URL", async () => {
+  vi.mocked(invoke).mockClear();
+  const api: SearchApi = { start: vi.fn().mockResolvedValue(done), snapshot: vi.fn().mockResolvedValue(done), cancel: vi.fn().mockResolvedValue(true) };
+  render(<Discover api={api} available canAdd managedIds={new Set()} onChoose={vi.fn()} />);
+  await userEvent.click(screen.getByRole("button", { name: /^Search$/ }));
+  await waitFor(() => expect(invoke).toHaveBeenCalledWith("get_artwork", { infoHash: row.info_hash }));
+});
 function setup(overrides: Partial<SearchApi> = {}, snapshot = done) {
   const api: SearchApi = {
     start: vi.fn().mockResolvedValue(snapshot),

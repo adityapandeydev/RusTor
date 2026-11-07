@@ -9,6 +9,22 @@ fn parse(kind: Kind, value: Value) -> Vec<Candidate> {
     decode(kind, &serde_json::to_vec(&value).unwrap()).unwrap()
 }
 #[test]
+fn artwork_comes_from_provider_metadata_and_invalid_covers_do_not_remove_results() {
+    let mut movie = yts();
+    movie["data"]["movies"][0]["medium_cover_image"] =
+        json!("https://yts.mx/assets/images/movies/fixture/medium-cover.jpg");
+    assert!(parse(Kind::Yts, movie.clone())[0].artwork_url.is_some());
+    movie["data"]["movies"][0]["medium_cover_image"] = json!("https://127.0.0.1/cover.jpg");
+    let rows = parse(Kind::Yts, movie);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].artwork_url.is_none());
+    let anime = json!({"fixture":{"show":"Fixture", "image_url":"/wp-content/uploads/2026/01/cover.jpg", "downloads":[{"res":"1080","magnet":format!("magnet:?xt=urn:btih:{HASH}")}]}});
+    assert_eq!(
+        parse(Kind::SubsPlease, anime)[0].artwork_url.as_deref(),
+        Some("https://subsplease.org/wp-content/uploads/2026/01/cover.jpg")
+    );
+}
+#[test]
 fn yts_maps_all_variants_counts_dates_and_keeps_unknown_metadata() {
     let mut value = yts();
     value["data"]["movies"][0]["torrents"]

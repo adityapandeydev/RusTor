@@ -10,12 +10,34 @@ fn candidate(hash: &str, name: &str, seeders: Option<u32>, tracker: &str) -> Can
         size_bytes: Some(1024),
         file_count: None,
         added_unix_ms: None,
+        artwork_url: None,
     }
 }
 fn provider(id: &str, health: bool) -> ProviderDescriptor {
     ProviderDescriptor::new(id, id, vec![Category::Movies], health).unwrap()
 }
 const HASH: &str = "0123456789abcdef0123456789abcdef01234567";
+
+#[test]
+fn merge_retains_artwork_from_another_provider_for_the_same_hash_only() {
+    let mut index = ResultIndex::default();
+    let lower = candidate(HASH, "Fixture", Some(3), "udp://low.example:80");
+    let mut higher = candidate(HASH, "Fixture winner", Some(9), "udp://high.example:80");
+    let mut cover = lower.clone();
+    cover.artwork_url = Some("https://yts.mx/assets/images/movies/fixture/medium-cover.jpg".into());
+    higher.artwork_url = Some("https://evil.example/cover.jpg".into());
+    index.insert(&provider("yts", true), cover).unwrap();
+    index.insert(&provider("other", true), higher).unwrap();
+    let rows = index.results(&SearchRequest::new(SearchQuery::new("").unwrap()));
+    assert_eq!(rows[0].winning_provider, "other");
+    assert!(
+        rows[0]
+            .artwork_url
+            .as_deref()
+            .unwrap()
+            .starts_with("https://yts.mx/")
+    );
+}
 
 #[test]
 fn merge_keeps_winning_magnet_extensions_trackers_and_missing_metadata() {

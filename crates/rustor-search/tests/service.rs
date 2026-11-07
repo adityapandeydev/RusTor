@@ -47,6 +47,7 @@ fn row(id: u32) -> Candidate {
         leechers: None,
         file_count: None,
         added_unix_ms: None,
+        artwork_url: None,
     }
 }
 fn fixture(

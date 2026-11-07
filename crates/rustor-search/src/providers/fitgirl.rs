@@ -135,6 +135,7 @@ fn parse(bytes: &[u8]) -> Result<(Vec<Candidate>, usize), ProviderFailure> {
             String::new()
         };
         let mut row = candidate(magnet_hash(&magnet).unwrap_or_default(), name);
+        row.artwork_url = html::first_artwork(content, "fitgirl")?;
         row.magnet = native_magnet(magnet);
         row.added_unix_ms = timestamp(field("pubDate"));
         out.push(row);
@@ -169,6 +170,14 @@ mod tests {
         );
         assert!(url.query_pairs().any(|(k, v)| k == "s" && v == q.as_str()));
         assert_eq!(p.url(&SearchQuery::new("").unwrap(), 1).path(), "/feed/");
+    }
+    #[test]
+    fn artwork_skips_decorative_images_and_keeps_the_game_cover() {
+        let content = r#"<img src="https://media.tenor.com/decorative.gif"><img src="https://i3.imageban.ru/out/2026/01/cover.jpg">"#;
+        assert_eq!(
+            html::first_artwork(content, "fitgirl").unwrap().as_deref(),
+            Some("https://i3.imageban.ru/out/2026/01/cover.jpg")
+        );
     }
     #[tokio::test]
     async fn widens_full_feeds_keeps_partial_results_and_deduplicates_pages() {

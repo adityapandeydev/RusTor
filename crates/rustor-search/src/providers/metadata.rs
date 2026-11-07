@@ -35,6 +35,7 @@ pub(super) fn candidate(hash: String, name: String) -> Candidate {
         leechers: None,
         file_count: None,
         added_unix_ms: None,
+        artwork_url: None,
     }
 }
 // Native BitTorrent supports HTTP(S)/UDP trackers, not WebTorrent's WS(S).

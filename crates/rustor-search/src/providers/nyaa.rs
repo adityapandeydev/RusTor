@@ -97,6 +97,7 @@ fn parse_feed(bytes: &[u8]) -> Result<Vec<Candidate>, ProviderFailure> {
                 seeders: count(&field(item, Some(NAMESPACE), "seeders")),
                 leechers: count(&field(item, Some(NAMESPACE), "leechers")),
                 file_count: None,
+                artwork_url: None,
                 added_unix_ms: chrono::DateTime::parse_from_rfc2822(&field(item, None, "pubDate"))
                     .ok()
                     .and_then(|date| u64::try_from(date.timestamp_millis()).ok()),

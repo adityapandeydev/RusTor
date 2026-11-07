@@ -96,6 +96,7 @@ mod tests {
             leechers: None,
             file_count: None,
             added_unix_ms: None,
+            artwork_url: None,
         }
     }
     #[test]

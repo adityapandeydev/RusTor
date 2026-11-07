@@ -32,3 +32,12 @@ pub(super) fn bounded_text<'a>(parts: impl Iterator<Item = &'a str>, max: usize)
     }
     text.trim().to_owned()
 }
+
+/// Ignore decorative/third-party images; retain only a provider-approved cover.
+pub(super) fn first_artwork(html: &str, provider: &str) -> Result<Option<String>, ProviderFailure> {
+    let doc = document(html)?;
+    let images = selector("img[src]")?;
+    Ok(doc
+        .select(&images)
+        .find_map(|image| crate::artwork::artwork_url(provider, image.value().attr("src")?)))
+}

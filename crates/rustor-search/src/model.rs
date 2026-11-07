@@ -129,6 +129,7 @@ pub struct Candidate {
     pub leechers: Option<u32>,
     pub file_count: Option<u32>,
     pub added_unix_ms: Option<u64>,
+    pub artwork_url: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SearchResult {
@@ -140,6 +141,7 @@ pub struct SearchResult {
     pub leechers: Option<u32>,
     pub file_count: Option<u32>,
     pub added_unix_ms: Option<u64>,
+    pub artwork_url: Option<String>,
     pub winning_provider: String,
     pub providers: Vec<String>,
     pub has_unknown_health: bool,

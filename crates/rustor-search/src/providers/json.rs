@@ -204,6 +204,10 @@ fn decode(kind: Kind, body: &[u8]) -> Result<Vec<Candidate>, ProviderFailure> {
                         format!("{title} [{tag}]")
                     };
                     let mut row = candidate(text(torrent, "hash", 64), name);
+                    row.artwork_url = crate::artwork::artwork_url(
+                        "yts",
+                        &text(movie, "medium_cover_image", 2048),
+                    );
                     row.size_bytes = integer(torrent, "size_bytes");
                     row.seeders = count(torrent, "seeds");
                     row.leechers = count(torrent, "peers");
@@ -278,6 +282,8 @@ fn decode(kind: Kind, body: &[u8]) -> Result<Vec<Candidate>, ProviderFailure> {
                     )
                 };
                 let mut row = candidate(hash, name);
+                row.artwork_url =
+                    crate::artwork::artwork_url("subsplease", &text(value, "image_url", 2048));
                 row.magnet = native_magnet(magnet);
                 row.size_bytes = url::Url::parse(&row.magnet).ok().and_then(|url| {
                     url.query_pairs()

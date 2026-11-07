@@ -37,6 +37,7 @@ import type {
 import { bytes, displayPath } from "./format";
 import { FileChoices } from "./FileChoices";
 import { Discover } from "./Discover";
+import { Artwork } from "./Artwork";
 import { desktopSearch } from "./searchBridge";
 import type { SearchApi } from "./searchBridge";
 import { DownloadSettingsPanel } from "./DownloadSettingsPanel";
@@ -733,9 +734,7 @@ function TorrentRow({
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
-          <span className="file-mark">
-            <File size={19} aria-hidden="true" />
-          </span>
+          <Artwork infoHash={torrent.id} compact />
           <span className="torrent-name">
             <strong title={name}>{name}</strong>
             <span>

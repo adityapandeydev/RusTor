@@ -5,6 +5,22 @@ mod settings;
 mod startup;
 mod updater;
 
+#[tauri::command]
+async fn get_artwork(
+    info_hash: String,
+    search: tauri::State<'_, search::DesktopSearch>,
+    cache: tauri::State<'_, rustor_search::artwork::ArtworkCache>,
+) -> Result<Option<String>, CommandError> {
+    // The caller supplies only an identity. URLs come from native-validated results.
+    let Ok(hash) = rustor_search::InfoHash::parse(&info_hash) else {
+        return Ok(None);
+    };
+    Ok(match search.artwork_result(hash.as_str()).await {
+        Some(row) => cache.get_for_result(&row).await,
+        None => cache.get(hash.as_str(), None).await,
+    })
+}
+
 use service::{
     AddSource, AppSnapshot, CommandError, DesktopState, PreparedSelection, SaveSettingsRequest,
     Selection, StartRequest,
@@ -196,6 +212,7 @@ pub fn run() {
             start_search,
             get_search_snapshot,
             cancel_search,
+            get_artwork,
             quit_app,
             updater::get_update_status,
             updater::check_update,
@@ -212,6 +229,9 @@ pub fn run() {
             let state_dir = std::env::var_os("RUSTOR_DEV_STATE_DIR")
                 .map(std::path::PathBuf::from)
                 .unwrap_or(state_dir);
+            app.manage(rustor_search::artwork::ArtworkCache::new(
+                state_dir.join("artwork-cache"),
+            ));
             let state = Arc::new(DesktopState::with_startup(rustor_torrent::EngineConfig::new(
                 download_dir,
                 state_dir,

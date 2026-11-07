@@ -1,4 +1,6 @@
 //! Torrent search orchestration and bounded provider adapters; no desktop UI or torrent session.
+pub mod artwork;
+mod artwork_lookup;
 mod cache;
 mod model;
 mod results;

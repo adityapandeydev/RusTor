@@ -91,6 +91,10 @@ impl ResultIndex {
             candidate.seeders = None;
             candidate.leechers = None;
         }
+        candidate.artwork_url = candidate
+            .artwork_url
+            .as_deref()
+            .and_then(|value| crate::artwork::artwork_url(&source.id, value));
         candidate.file_count = candidate.file_count.filter(|count| *count > 0);
         self.rows.entry(hash).or_default().push(Row {
             candidate,
@@ -179,6 +183,7 @@ fn merge(hash: &InfoHash, rows: &[Row]) -> SearchResult {
         added_unix_ms: c
             .added_unix_ms
             .or_else(|| ranked.iter().find_map(|r| r.candidate.added_unix_ms)),
+        artwork_url: ranked.iter().find_map(|r| r.candidate.artwork_url.clone()),
         winning_provider: winner.provider.clone(),
         providers: rows
             .iter()
