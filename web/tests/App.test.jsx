@@ -104,8 +104,9 @@ it('pre-renders the complete page and hydrates without replacing it or reporting
   document.body.append(container);
   const heading = container.querySelector('h1');
   expect(heading.textContent).toBe('Good things.Piece by piece.');
-  expect(container.querySelectorAll('.faq-grid details')).toHaveLength(9);
+  expect(container.querySelectorAll('.faq-grid details')).toHaveLength(10);
   expect(container.querySelector('.faq-grid').textContent).toContain('How do updates work?');
+  expect(container.querySelector('.faq-grid').textContent).toContain('Where does cover artwork come from?');
   expect(container.querySelector('#package-links a').href).toBe(`${repository}/releases`);
   const onRecoverableError = vi.fn();
   let root;
