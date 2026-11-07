@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 (unreleased)
+## 0.2.1
 
 - Provider artwork in Discover and Downloads, with lazy loading and a local thumbnail cache.
 - Keep the current list layout, theme, sorting and transfer controls. Missing artwork uses a file placeholder.

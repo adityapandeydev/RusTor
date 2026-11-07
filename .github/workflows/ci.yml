@@ -2,8 +2,29 @@ name: Desktop checks
 
 on:
   pull_request:
+    paths: &desktop-paths
+      - 'apps/desktop/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain*'
+      - '.cargo/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'scripts/**'
+      - 'about.toml'
+      - 'deny.toml'
+      - 'rustfmt.toml'
+      - '.rustfmt.toml'
+      - 'clippy.toml'
+      - '.clippy.toml'
+      - 'LICENSE'
+      - 'README.md'
   push:
     branches: [main, 'feat/**', 'fix/**']
+    # Workflow-only changes can be validated with the manual trigger.
+    paths: *desktop-paths
+  workflow_dispatch:
 
 permissions:
   contents: read
