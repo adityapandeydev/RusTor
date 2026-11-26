@@ -120,7 +120,13 @@ impl Http {
             .header(header::ACCEPT_ENCODING, "identity")
             .send()
             .await
-            .map_err(|_| ProviderFailure::Unavailable)?;
+            .map_err(|error| {
+                if error.is_connect() || error.is_timeout() {
+                    ProviderFailure::Unreachable
+                } else {
+                    ProviderFailure::Unavailable
+                }
+            })?;
         let status = response.status();
         let after = response
             .headers()
@@ -138,6 +144,12 @@ impl Http {
             && let Some(seconds) = after
         {
             self.cooldown(seconds, ProviderFailure::Unavailable).await;
+        }
+        if status.is_redirection() {
+            return Err(ProviderFailure::Moved);
+        }
+        if challenged(status, response.headers()) {
+            return Err(ProviderFailure::Blocked);
         }
         if status != StatusCode::OK {
             return Err(ProviderFailure::Unavailable);
@@ -181,6 +193,16 @@ impl Http {
         Ok(body)
     }
 }
+/// Cloudflare marks interactive bot challenges explicitly; plain 401/403 is ordinary unavailability.
+pub(super) fn challenged(status: StatusCode, headers: &header::HeaderMap) -> bool {
+    matches!(
+        status,
+        StatusCode::FORBIDDEN | StatusCode::SERVICE_UNAVAILABLE
+    ) && headers
+        .get("cf-mitigated")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case("challenge"))
+}
 pub(super) fn client(require_https: bool) -> Result<Client, SearchError> {
     let builder = Client::builder()
         .https_only(require_https)
@@ -194,6 +216,12 @@ pub(super) fn client(require_https: bool) -> Result<Client, SearchError> {
         .no_deflate()
         .no_zstd()
         .user_agent(concat!("RusTor/", env!("CARGO_PKG_VERSION")));
+    // Production origins resolve over DoH; local test servers use IP literals.
+    let builder = if require_https {
+        builder.dns_resolver(crate::dns::shared())
+    } else {
+        builder
+    };
     #[cfg(test)]
     let builder = if !require_https {
         builder.no_proxy()

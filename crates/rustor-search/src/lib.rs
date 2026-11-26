@@ -2,6 +2,7 @@
 pub mod artwork;
 mod artwork_lookup;
 mod cache;
+mod dns;
 mod model;
 mod results;
 pub use model::*;

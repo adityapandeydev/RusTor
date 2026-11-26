@@ -103,7 +103,7 @@ fn query(row: &SearchResult) -> Option<Query> {
         Kind::Anime
     } else if has(&["eztv", "tpb-tv", "x1337-tv"]) {
         Kind::Tv
-    } else if has(&["yts", "tpb-movies", "x1337-movies", "bittorrented"]) {
+    } else if has(&["yts", "tpb-movies", "x1337-movies"]) {
         Kind::Movie
     } else {
         return None;

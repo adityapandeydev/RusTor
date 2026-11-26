@@ -188,10 +188,39 @@ impl SearchRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum ProviderFailure {
+    /// The source answered but could not serve this search (including sign-in-only APIs).
     Unavailable,
+    /// No connection could be made in time. Often a network or ISP block; a VPN may help.
+    Unreachable,
+    /// The site answered with an anti-bot challenge that only a browser can pass.
+    Blocked,
+    /// The fixed endpoint redirected elsewhere; redirects are never followed.
+    Moved,
     InvalidResponse,
-    RateLimited { retry_after_seconds: Option<u64> },
+    RateLimited {
+        retry_after_seconds: Option<u64>,
+    },
     Panicked,
+}
+impl ProviderFailure {
+    /// When mirrors fail differently, keep the explanation that tells the user most.
+    pub fn most_specific(self, other: Self) -> Self {
+        if other.specificity() > self.specificity() {
+            other
+        } else {
+            self
+        }
+    }
+    fn specificity(&self) -> u8 {
+        match self {
+            Self::Unavailable => 0,
+            Self::Unreachable => 1,
+            Self::InvalidResponse => 2,
+            Self::Moved => 3,
+            Self::Blocked => 4,
+            Self::RateLimited { .. } | Self::Panicked => 5,
+        }
+    }
 }
 pub type ProviderFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<Candidate>, ProviderFailure>> + Send + 'a>>;

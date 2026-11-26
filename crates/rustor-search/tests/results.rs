@@ -24,7 +24,7 @@ fn merge_retains_artwork_from_another_provider_for_the_same_hash_only() {
     let lower = candidate(HASH, "Fixture", Some(3), "udp://low.example:80");
     let mut higher = candidate(HASH, "Fixture winner", Some(9), "udp://high.example:80");
     let mut cover = lower.clone();
-    cover.artwork_url = Some("https://yts.mx/assets/images/movies/fixture/medium-cover.jpg".into());
+    cover.artwork_url = Some("https://yts.pw/assets/images/movies/fixture/medium-cover.jpg".into());
     higher.artwork_url = Some("https://evil.example/cover.jpg".into());
     index.insert(&provider("yts", true), cover).unwrap();
     index.insert(&provider("other", true), higher).unwrap();
@@ -35,7 +35,7 @@ fn merge_retains_artwork_from_another_provider_for_the_same_hash_only() {
             .artwork_url
             .as_deref()
             .unwrap()
-            .starts_with("https://yts.mx/")
+            .starts_with("https://img.yts.pw/")
     );
 }
 

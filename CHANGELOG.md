@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.2
+
+### Fixed
+
+- Look up search and artwork hosts with encrypted DNS-over-HTTPS (Cloudflare, with Google as a fallback, and system DNS if both are unreachable), which can improve source availability on networks with DNS-level filtering. Only fixed host names are sent.
+- Update YTS to its current API hosts (`movies-api.accel.li`, `yts.pw`, `yts.rs`) and cover image hosts; retire `yts.mx` and `yts.am`.
+- Explain source failures in Discover: could not connect (a VPN or another network may help), blocked by the site's bot check, moved, or unavailable. Sources with several mirrors report the most specific reason.
+- Correct the README's description of tray mode, in-app updates and where to download releases.
+
+### Removed
+
+- BitTorrented search, whose API now requires an invitation-only account.
+
 ## 0.2.1
 
 - Provider artwork in Discover and Downloads, with lazy loading and a local thumbnail cache.

@@ -13,7 +13,6 @@ const MAX_ROWS: usize = 101;
 #[derive(Clone, Copy)]
 enum Kind {
     Yts,
-    BitTorrented,
     SubsPlease,
 }
 /// Fixed-endpoint JSON adapters ported from Torlink. Responses contain metadata only.
@@ -27,9 +26,6 @@ impl JsonProvider {
     pub fn yts() -> Result<Self, SearchError> {
         Self::new(Kind::Yts)
     }
-    pub fn bittorrented() -> Result<Self, SearchError> {
-        Self::new(Kind::BitTorrented)
-    }
     pub fn subsplease() -> Result<Self, SearchError> {
         Self::new(Kind::SubsPlease)
     }
@@ -40,18 +36,12 @@ impl JsonProvider {
                 "YTS",
                 vec![Category::Movies],
                 true,
+                // yts.pw announces movies-api.accel.li as its new API base.
                 vec![
-                    "https://yts.mx/api/v2/list_movies.json",
-                    "https://yts.am/api/v2/list_movies.json",
+                    "https://movies-api.accel.li/api/v2/list_movies.json",
+                    "https://yts.pw/api/v2/list_movies.json",
                     "https://yts.rs/api/v2/list_movies.json",
                 ],
-            ),
-            Kind::BitTorrented => (
-                "bittorrented",
-                "BitTorrented",
-                vec![Category::Movies, Category::Tv],
-                true,
-                vec!["https://bittorrented.com/api/search/torrents"],
             ),
             Kind::SubsPlease => (
                 "subsplease",
@@ -87,14 +77,6 @@ impl JsonProvider {
                     params.append_pair("query_term", query.as_str());
                 }
             }
-            Kind::BitTorrented => {
-                params
-                    .append_pair("q", query.as_str())
-                    .append_pair("type", "video")
-                    .append_pair("limit", "50")
-                    .append_pair("sortBy", "seeders")
-                    .append_pair("sortOrder", "desc");
-            }
             Kind::SubsPlease => {
                 params.append_pair("tz", "UTC");
                 if query.as_str().is_empty() {
@@ -110,9 +92,6 @@ impl JsonProvider {
         url
     }
     async fn fetch(&self, query: &SearchQuery) -> Result<Vec<Candidate>, ProviderFailure> {
-        if matches!(self.kind, Kind::BitTorrented) && query.as_str().chars().count() < 3 {
-            return Ok(vec![]);
-        }
         let mut failure = ProviderFailure::Unavailable;
         for endpoint in &self.endpoints {
             let kind = self.kind;
@@ -134,11 +113,11 @@ impl JsonProvider {
                         .map_err(|_| ProviderFailure::InvalidResponse)?;
                     match decoded {
                         Ok(rows) => return Ok(rows),
-                        Err(error) => failure = error,
+                        Err(error) => failure = failure.most_specific(error),
                     }
                 }
                 Err(error @ ProviderFailure::RateLimited { .. }) => return Err(error),
-                Err(error) => failure = error,
+                Err(error) => failure = failure.most_specific(error),
             }
         }
         Err(failure)
@@ -219,24 +198,6 @@ fn decode(kind: Kind, body: &[u8]) -> Result<Vec<Candidate>, ProviderFailure> {
                 if out.len() == MAX_ROWS {
                     break;
                 }
-            }
-        }
-        Kind::BitTorrented => {
-            let rows = root
-                .get("results")
-                .and_then(Value::as_array)
-                .ok_or_else(invalid)?;
-            for value in rows.iter().take(MAX_ROWS) {
-                let mut row = candidate(
-                    text(value, "torrent_infohash", 64),
-                    text(value, "torrent_name", 1024),
-                );
-                row.size_bytes = integer(value, "torrent_total_size");
-                row.seeders = count(value, "torrent_seeders");
-                row.leechers = count(value, "torrent_leechers");
-                row.file_count = count(value, "torrent_file_count");
-                row.added_unix_ms = timestamp(&text(value, "torrent_created_at", 128));
-                out.push(row);
             }
         }
         Kind::SubsPlease => {

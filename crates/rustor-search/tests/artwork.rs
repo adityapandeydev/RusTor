@@ -63,13 +63,31 @@ fn artwork_is_limited_to_the_providers_image_origins_and_paths() {
         .as_deref(),
         Some("https://yts.rs/images/images/tt1361349/medium_cover_image.jpg")
     );
+    assert_eq!(
+        artwork_url(
+            "yts",
+            "https://yts.pw/assets/images/movies/fixture/medium-cover.jpg"
+        )
+        .as_deref(),
+        Some("https://img.yts.pw/assets/images/movies/fixture/medium-cover.jpg")
+    );
     assert!(
         artwork_url(
             "yts",
-            "https://yts.mx/assets/images/movies/fixture/medium-cover.jpg"
+            "https://img.yts.pw/assets/images/movies/fixture/medium-cover.jpg"
         )
         .is_some()
     );
+    // Retired mirrors no longer resolve publicly and are not trusted image origins.
+    for retired in ["yts.mx", "yts.am"] {
+        assert!(
+            artwork_url(
+                "yts",
+                &format!("https://{retired}/assets/images/movies/fixture/medium-cover.jpg")
+            )
+            .is_none()
+        );
+    }
     assert_eq!(
         artwork_url("subsplease", "/wp-content/uploads/2026/01/cover.jpg").as_deref(),
         Some("https://subsplease.org/wp-content/uploads/2026/01/cover.jpg")

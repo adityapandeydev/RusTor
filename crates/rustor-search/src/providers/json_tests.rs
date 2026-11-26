@@ -12,8 +12,12 @@ fn parse(kind: Kind, value: Value) -> Vec<Candidate> {
 fn artwork_comes_from_provider_metadata_and_invalid_covers_do_not_remove_results() {
     let mut movie = yts();
     movie["data"]["movies"][0]["medium_cover_image"] =
-        json!("https://yts.mx/assets/images/movies/fixture/medium-cover.jpg");
-    assert!(parse(Kind::Yts, movie.clone())[0].artwork_url.is_some());
+        json!("https://yts.pw/assets/images/movies/fixture/medium-cover.jpg");
+    // yts.pw redirects covers to its image host, so the direct host is stored.
+    assert_eq!(
+        parse(Kind::Yts, movie.clone())[0].artwork_url.as_deref(),
+        Some("https://img.yts.pw/assets/images/movies/fixture/medium-cover.jpg")
+    );
     movie["data"]["movies"][0]["medium_cover_image"] = json!("https://127.0.0.1/cover.jpg");
     let rows = parse(Kind::Yts, movie);
     assert_eq!(rows.len(), 1);
@@ -50,26 +54,6 @@ fn yts_maps_all_variants_counts_dates_and_keeps_unknown_metadata() {
     assert_eq!(
         url.query_pairs().filter(|(key, _)| key == "tr").count(),
         magnet::TRACKERS.len()
-    );
-}
-#[test]
-fn bittorrented_preserves_metadata_unknown_counts_and_rejected_rows() {
-    let rows = parse(
-        Kind::BitTorrented,
-        json!({"results":[{"torrent_infohash":HASH,"torrent_name":"Public fixture","torrent_total_size":0,"torrent_seeders":0,"torrent_leechers":null,"torrent_file_count":4,"torrent_created_at":"2024-01-01T00:00:00Z"},{"torrent_infohash":"invalid","torrent_name":"Rejected"}]}),
-    );
-    assert_eq!(rows[0].size_bytes, Some(0));
-    assert_eq!(rows[0].seeders, Some(0));
-    assert_eq!(rows[0].leechers, None);
-    assert_eq!(rows[0].file_count, Some(4));
-    assert_eq!(rows[0].added_unix_ms, Some(1_704_067_200_000));
-    let provider = JsonProvider::bittorrented().unwrap();
-    let mut index = ResultIndex::default();
-    assert!(index.insert(provider.descriptor(), rows[0].clone()).is_ok());
-    assert!(
-        index
-            .insert(provider.descriptor(), rows[1].clone())
-            .is_err()
     );
 }
 #[test]
@@ -127,7 +111,6 @@ fn rejects_bad_envelopes_oversized_json_and_excessive_nesting() {
     for (kind, value) in [
         (Kind::Yts, json!({})),
         (Kind::Yts, json!({"status":"error","data":{"movies":[]}})),
-        (Kind::BitTorrented, json!({"error":"not authorized"})),
         (Kind::SubsPlease, json!([{"unexpected":true}])),
     ] {
         assert!(decode(kind, &serde_json::to_vec(&value).unwrap()).is_err());
@@ -142,7 +125,6 @@ fn rejects_bad_envelopes_oversized_json_and_excessive_nesting() {
         .is_err()
     );
     assert!(parse(Kind::Yts, json!({"data":{"movie_count":0}})).is_empty());
-    assert!(parse(Kind::BitTorrented, json!({"results":[]})).is_empty());
     assert!(parse(Kind::SubsPlease, json!([])).is_empty());
     assert!(parse(Kind::SubsPlease, json!({})).is_empty());
 }
@@ -151,7 +133,6 @@ fn encodes_queries_and_preserves_upstream_category_and_browse_parameters() {
     let query = SearchQuery::new("public & limit=999 #α").unwrap();
     for provider in [
         JsonProvider::yts().unwrap(),
-        JsonProvider::bittorrented().unwrap(),
         JsonProvider::subsplease().unwrap(),
     ] {
         let url = provider.request_url(&provider.endpoints[0], &query);
@@ -160,12 +141,6 @@ fn encodes_queries_and_preserves_upstream_category_and_browse_parameters() {
             !url.query_pairs()
                 .any(|(key, value)| key == "limit" && value == "999")
         );
-        if matches!(provider.kind, Kind::BitTorrented) {
-            assert!(
-                url.query_pairs()
-                    .any(|(key, value)| key == "type" && value == "video")
-            );
-        }
     }
     let provider = JsonProvider::yts().unwrap();
     assert!(
@@ -223,7 +198,7 @@ async fn yts_falls_back_to_next_configured_mirror_with_original_query() {
     assert!(two.await.unwrap().contains("query_term=public+%26+domain"));
 }
 #[tokio::test]
-async fn rate_limit_does_not_rotate_mirrors_and_short_queries_do_not_request_bittorrented() {
+async fn rate_limit_does_not_rotate_mirrors() {
     let (endpoint, task) = server("429 Too Many Requests", "application/json", "{}".into()).await;
     let provider = local(
         JsonProvider::yts().unwrap(),
@@ -234,24 +209,59 @@ async fn rate_limit_does_not_rotate_mirrors_and_short_queries_do_not_request_bit
         Err(ProviderFailure::RateLimited { .. })
     ));
     task.await.unwrap();
+}
+#[tokio::test]
+async fn failures_report_unreachable_blocked_moved_and_plain_unavailable_distinctly() {
+    let query = SearchQuery::new("public").unwrap();
+    // Nothing listens on port 1: a refused or timed-out connection may be a network block.
     let provider = local(
-        JsonProvider::bittorrented().unwrap(),
+        JsonProvider::yts().unwrap(),
         vec![url::Url::parse("http://127.0.0.1:1/").unwrap()],
     );
-    assert!(
-        provider
-            .fetch(&SearchQuery::new("ab").unwrap())
-            .await
-            .unwrap()
-            .is_empty()
-    );
     assert_eq!(
-        provider
-            .fetch(&SearchQuery::new("abc").unwrap())
-            .await
-            .unwrap_err(),
-        ProviderFailure::Unavailable
+        provider.fetch(&query).await.unwrap_err(),
+        ProviderFailure::Unreachable
     );
+    for (status, headers, expected) in [
+        (
+            "403 Forbidden",
+            "text/html
+cf-mitigated: challenge",
+            ProviderFailure::Blocked,
+        ),
+        (
+            "503 Service Unavailable",
+            "text/html
+CF-Mitigated: Challenge",
+            ProviderFailure::Blocked,
+        ),
+        (
+            "301 Moved Permanently",
+            "text/html
+Location: https://example.invalid/",
+            ProviderFailure::Moved,
+        ),
+        // Sign-in-only APIs are ordinary unavailability; users cannot log in here.
+        (
+            "401 Unauthorized",
+            "application/json",
+            ProviderFailure::Unavailable,
+        ),
+        (
+            "403 Forbidden",
+            "application/json",
+            ProviderFailure::Unavailable,
+        ),
+    ] {
+        let (endpoint, task) = server(status, headers, "{}".into()).await;
+        let provider = local(JsonProvider::yts().unwrap(), vec![endpoint]);
+        assert_eq!(
+            provider.fetch(&query).await.unwrap_err(),
+            expected,
+            "{status} {headers}"
+        );
+        task.await.unwrap();
+    }
 }
 #[tokio::test]
 async fn subsplease_accepts_its_mislabeled_json_but_rejects_html_and_auth_errors() {
@@ -300,11 +310,16 @@ fn strips_only_websocket_trackers_without_rewriting_other_magnet_parameters() {
 #[test]
 fn registry_exposes_connected_categories_without_network_calls() {
     let providers = super::super::desktop_providers().unwrap();
-    assert_eq!(providers.len(), 10);
+    assert_eq!(providers.len(), 9);
+    assert!(
+        providers
+            .iter()
+            .all(|p| p.descriptor().id != "bittorrented")
+    );
     for (category, count) in [
         (Category::Anime, 2),
-        (Category::Movies, 4),
-        (Category::Tv, 4),
+        (Category::Movies, 3),
+        (Category::Tv, 3),
         (Category::Games, 1),
     ] {
         assert_eq!(
@@ -315,4 +330,25 @@ fn registry_exposes_connected_categories_without_network_calls() {
             count
         );
     }
+}
+#[tokio::test]
+async fn mirrors_report_the_most_specific_failure_regardless_of_order() {
+    let query = SearchQuery::new("public").unwrap();
+    let refused = url::Url::parse("http://127.0.0.1:1/").unwrap();
+    let (challenge, task) = server(
+        "403 Forbidden",
+        "text/html\r\ncf-mitigated: challenge",
+        "{}".into(),
+    )
+    .await;
+    let provider = local(JsonProvider::yts().unwrap(), vec![challenge, refused]);
+    assert_eq!(
+        provider.fetch(&query).await.unwrap_err(),
+        ProviderFailure::Blocked
+    );
+    task.await.unwrap();
+    assert_eq!(
+        ProviderFailure::Unreachable.most_specific(ProviderFailure::Unavailable),
+        ProviderFailure::Unreachable
+    );
 }

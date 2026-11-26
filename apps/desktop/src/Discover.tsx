@@ -35,11 +35,20 @@ function providerMessage(status: ProviderStatus): string {
     case "complete":
       return `${status.accepted} results${status.rejected ? ` · ${status.rejected} invalid entries skipped` : ""}`;
     case "failed":
-      if (status.failure.code === "rate_limited")
-        return `Rate limited${status.failure.retry_after_seconds ? ` · try again in ${status.failure.retry_after_seconds}s` : " · try again later"}`;
-      return status.failure.code === "invalid_response"
-        ? "Feed could not be read. Try again later."
-        : "Unavailable. Try again later.";
+      switch (status.failure.code) {
+        case "rate_limited":
+          return `Rate limited${status.failure.retry_after_seconds ? ` · try again in ${status.failure.retry_after_seconds}s` : " · try again later"}`;
+        case "invalid_response":
+          return "Feed could not be read. Try again later.";
+        case "unreachable":
+          return "Couldn't connect. It may be down or blocked on your network; a VPN or another network may help.";
+        case "blocked":
+          return "Blocked by the site's bot check. It may work later or from another network.";
+        case "moved":
+          return "This source has moved. A RusTor update may be needed.";
+        default:
+          return "Unavailable. Try again later.";
+      }
     case "timed_out":
     case "deadline_exceeded":
       return "Search timed out. Try again.";

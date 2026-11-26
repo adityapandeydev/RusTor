@@ -32,7 +32,14 @@ export type ProviderStatus =
   | {
       state: "failed";
       failure: {
-        code: "unavailable" | "invalid_response" | "panicked" | "rate_limited";
+        code:
+          | "unavailable"
+          | "unreachable"
+          | "blocked"
+          | "moved"
+          | "invalid_response"
+          | "panicked"
+          | "rate_limited";
         retry_after_seconds?: number | null;
       };
     };

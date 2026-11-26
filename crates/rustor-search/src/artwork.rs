@@ -36,9 +36,9 @@ pub fn artwork_url(provider: &str, value: &str) -> Option<String> {
     let host = url.host_str()?;
     let allowed = match provider {
         "yts" => {
-            matches!(host, "yts.mx" | "yts.am" | "yts.rs")
-                && (url.path().starts_with("/assets/images/movies/")
-                    || url.path().starts_with("/images/images/"))
+            (matches!(host, "yts.pw" | "img.yts.pw")
+                && url.path().starts_with("/assets/images/movies/"))
+                || (host == "yts.rs" && url.path().starts_with("/images/images/"))
         }
         "subsplease" => host == "subsplease.org" && url.path().starts_with("/wp-content/uploads/"),
         "fitgirl" => {
@@ -64,6 +64,10 @@ pub fn artwork_url(provider: &str, value: &str) -> Option<String> {
     };
     if !allowed {
         return None;
+    }
+    // yts.pw serves covers by redirecting to its image host; redirects are never followed.
+    if provider == "yts" && host == "yts.pw" {
+        return Some(format!("https://img.yts.pw{}", url.path()));
     }
     // Request a small IMDb CDN rendition; full-resolution posters can exceed decode limits.
     if provider == "metadata" && host == "m.media-amazon.com" {
@@ -94,6 +98,7 @@ impl ArtworkCache {
                 .timeout(Duration::from_secs(8))
                 .connect_timeout(Duration::from_secs(4))
                 .user_agent(concat!("RusTor/", env!("CARGO_PKG_VERSION")))
+                .dns_resolver(crate::dns::shared())
                 .build()
                 .ok(),
             slots: Semaphore::new(3),

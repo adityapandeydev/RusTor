@@ -23,7 +23,6 @@ pub fn desktop_providers() -> Result<Vec<std::sync::Arc<dyn crate::Provider>>, c
     Ok(vec![
         std::sync::Arc::new(NyaaProvider::new()?),
         std::sync::Arc::new(JsonProvider::yts()?),
-        std::sync::Arc::new(JsonProvider::bittorrented()?),
         std::sync::Arc::new(JsonProvider::subsplease()?),
         std::sync::Arc::new(TpbProvider::movies()?),
         std::sync::Arc::new(TpbProvider::tv()?),

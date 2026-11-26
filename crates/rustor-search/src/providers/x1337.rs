@@ -100,11 +100,11 @@ impl X1337Provider {
                             selected = Some((base, rows));
                             break;
                         }
-                        Err(error) => failure = error,
+                        Err(error) => failure = failure.most_specific(error),
                     }
                 }
                 Err(error @ ProviderFailure::RateLimited { .. }) => return Err(error),
-                Err(error) => failure = error,
+                Err(error) => failure = failure.most_specific(error),
             }
         }
         let (base, rows) = selected.ok_or(failure)?;

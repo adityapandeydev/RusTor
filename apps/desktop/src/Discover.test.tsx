@@ -156,6 +156,39 @@ describe("Discover", () => {
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
     expect(api.start).toHaveBeenCalledTimes(2);
   });
+  it("explains network blocks, bot checks and moved sources separately", async () => {
+    setup(
+      {},
+      {
+        ...done,
+        results: [],
+        partial: true,
+        providers: [
+          {
+            descriptor: { id: "eztv", label: "EZTV" },
+            status: { state: "failed", failure: { code: "unreachable" } },
+          },
+          {
+            descriptor: { id: "x1337-movies", label: "1337x" },
+            status: { state: "failed", failure: { code: "blocked" } },
+          },
+          {
+            descriptor: { id: "yts", label: "YTS" },
+            status: { state: "failed", failure: { code: "moved" } },
+          },
+          {
+            descriptor: { id: "tpb-movies", label: "TPB" },
+            status: { state: "failed", failure: { code: "unavailable" } },
+          },
+        ],
+      },
+    );
+    await submit();
+    expect(screen.getByText(/blocked on your network; a VPN/)).toBeTruthy();
+    expect(screen.getByText(/site's bot check/)).toBeTruthy();
+    expect(screen.getByText(/source has moved/)).toBeTruthy();
+    expect(screen.getByText("Unavailable. Try again later.")).toBeTruthy();
+  });
   it("stops a running search and keeps partial results", async () => {
     let cancelled = false;
     const { api } = setup(

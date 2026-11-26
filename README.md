@@ -12,19 +12,21 @@ RusTor is a desktop BitTorrent client with built-in search, selective downloads,
 
 ## Features
 
-- **Search from the app.** Browse Movies, TV, Games, and Anime. Sort results by relevance, seeders, size, or date, and check swarm counts before adding a torrent.
+- **Search from the app.** Browse Movies, TV, Games, and Anime across several public sources at once. Sort results by relevance, seeders, size, or date, and check swarm counts before adding a torrent. Each source shows whether it answered, and why not when it didn't.
 - **Download only what you need.** Open a magnet link or `.torrent` file, preview its contents, choose files, and set a destination before starting.
 - **Manage several transfers at once.** Follow progress, speeds, and peer activity. Pause, resume, or retry a failed transfer from the Downloads screen.
 - **Stop without deleting your files.** Remove a torrent to stop downloading or seeding while keeping complete and partial files on disk.
 - **Pick up where you left off.** Saved torrents, destinations, and file selections return when you reopen RusTor. Existing data is checked before transfers resume.
 - **Set your own limits.** Choose a default download folder and control download and upload speeds across your session.
+- **Keep transfers running in the background.** Optionally keep RusTor in the system tray when you close its window, with **Pause all** and **Resume all** from the tray. Starting at login is optional too.
+- **Update from inside the app.** Installed builds can check for a new version in Download settings, verify its signature, and install it after you confirm a restart.
 - **Choose your theme.** Deep teal and lime in dark mode, with a pearl light mode to match. Your appearance preference is saved, and animations respect reduced-motion settings.
 
 ## Get RusTor
 
-[Download a preview build](https://github.com/adityapandeydev/RusTor/actions?query=workflow%3A%22Desktop+packages%22)
+[Download the latest release](https://github.com/adityapandeydev/RusTor/releases/latest)
 
-Open a successful **Desktop packages** run and download the artifact for your system. Extract the artifact archive to find the installer, license files, and checksums. GitHub requires you to sign in to download workflow artifacts, which are retained for 14 days.
+Each release lists installers for every supported system, together with `SHA256SUMS` and a `release-info` archive holding the license files and build provenance. Builds from unreleased changes are available as artifacts of successful [**Desktop packages** runs](https://github.com/adityapandeydev/RusTor/actions?query=workflow%3A%22Desktop+packages%22); GitHub requires you to sign in to download those, and keeps them for 14 days.
 
 | System | Package |
 | --- | --- |
@@ -35,7 +37,7 @@ Open a successful **Desktop packages** run and download the artifact for your sy
 
 You don't need Rust, Bun, or Node.js to use the app. On Windows, the installer can download WebView2 if it is missing; the standalone ZIP requires WebView2 to be installed already. The ZIP uses the same saved profile as an installed copy.
 
-**These are unsigned preview builds.** Windows and macOS may display security warnings. macOS notarization is not configured, and Linux/macOS desktop interaction and installation are not yet fully validated.
+**Builds are not publisher-signed.** Windows and macOS may display security warnings. (Update packages carry their own signature, which RusTor verifies before installing.) macOS notarization is not configured, and Linux/macOS desktop interaction and installation are not yet fully validated.
 
 ### Your first download
 
@@ -43,11 +45,15 @@ You don't need Rust, Bun, or Node.js to use the app. On Windows, the installer c
 2. Review the file list, choose what to download, and select a destination.
 3. Start the transfer and follow it in **Downloads**. Use pause, resume, retry, or the × control to stop it and remove it from the session.
 
-Downloads go to `Downloads/RusTor` by default. Closing RusTor stops downloading and seeding; there is no background tray service. Reopening the app restores the saved session and rechecks downloaded data, which can take time for large files.
+Downloads go to `Downloads/RusTor` by default. Unless you turn on **Continue running when closed**, closing the window quits RusTor and stops downloading and seeding; with it on, transfers keep going from the system tray. Reopening the app restores the saved session and rechecks downloaded data, which can take time for large files.
 
-**Artwork (0.2.1):** Discover shows covers supplied by supported search providers when available. Images load on demand through Rust and are cached locally as small PNGs (up to 256 covers, approximately 32 MiB). Cached covers also appear in Downloads after a restart, until evicted. When providers supply no cover, artwork uses exact cleaned-title/year matches from IMDb’s public suggestion endpoint (movies) or TVmaze (TV and anime). Ambiguous matches and manually added magnets without cached artwork use a file placeholder. These lookups send the cleaned title and year, never magnets, local paths or download history. No API account is needed. [TVmaze data](https://www.tvmaze.com/api) is attributed under CC BY-SA; movie artwork is attributed to IMDb. External service availability and metadata matching determine cover coverage.
+**Artwork.** Discover shows covers supplied by supported search providers when available. Images load on demand through Rust and are cached locally as small PNGs (up to 256 covers, approximately 32 MiB). Cached covers also appear in Downloads after a restart, until evicted. When providers supply no cover, artwork uses exact cleaned-title/year matches from IMDb’s public suggestion endpoint (movies) or TVmaze (TV and anime). Ambiguous matches and manually added magnets without cached artwork use a file placeholder. These lookups send the cleaned title and year, never magnets, local paths or download history. No API account is needed. [TVmaze data](https://www.tvmaze.com/api) is attributed under CC BY-SA; movie artwork is attributed to IMDb. External service availability and metadata matching determine cover coverage.
 
-**Background and updates (0.2.0):** Enable **Continue running when closed** in Download settings to keep transfers running in the system tray. The tray offers **Open RusTor**, **Pause all**, **Resume all**, and **Quit RusTor**. Optional **Start at login** and **Start minimized at login** preferences control login launches; opening RusTor yourself shows its window. Linux keeps a minimized window as a fallback. Sleep, logout and shutdown interrupt transfers. Installed Windows apps, macOS apps and Linux AppImages can check for updates in settings, verify the downloaded package, and install after an explicit restart confirmation. Versions 0.1.0–0.1.2 need one manual install-over upgrade; standalone Windows ZIP and Debian packages use manual upgrades. Native macOS/Linux desktop behavior and real installer upgrades still require validation.
+**Background mode.** Enable **Continue running when closed** in Download settings to keep transfers running in the system tray. The tray offers **Open RusTor**, **Pause all**, **Resume all**, and **Quit RusTor**. Optional **Start at login** and **Start minimized at login** preferences control login launches; opening RusTor yourself shows its window. If the system tray is unavailable, closing the window quits instead; Linux keeps a minimized window as a fallback. Sleep, logout and shutdown interrupt transfers.
+
+**Updates.** Installed Windows apps, macOS apps and Linux AppImages check for updates only when you ask, in Download settings. RusTor downloads the new package from this project's GitHub releases, verifies its signature, saves your session, and installs only after you confirm the restart; if the session cannot be saved, installation is cancelled. Versions 0.1.0–0.1.2 have no updater and need one manual install over the existing copy. The standalone Windows ZIP and the Debian package are updated manually. Native macOS/Linux desktop behavior and real installer upgrades still require validation.
+
+**Search sources.** Discover searches Nyaa and SubsPlease (anime), YTS (movies), The Pirate Bay and 1337x (movies and TV), EZTV (TV), and FitGirl Repacks (games). RusTor looks up these sites' fixed host names, and those of the artwork services, with encrypted DNS-over-HTTPS (Cloudflare, with Google as a fallback), which can improve source availability when a network filters DNS. These lookups send only the host name, never your search text; if neither DNS service can be reached, the system resolver is used. Torrent trackers and peers are not affected. Some networks block sites at the connection level, and some sites challenge automated clients, so a source can work on one network and not on another. Each source then says what happened: it could not connect (a VPN or another network may help), it was stopped by the site's bot check, it has moved, or it is unavailable.
 
 Search results depend on the availability of external sources; counts can be unavailable or up to five minutes old. RusTor currently supports v1 torrent identities and rejects v2-only torrents. It does not mask your IP address or include a VPN. Share only content you have permission to distribute.
 
@@ -141,7 +147,9 @@ cargo install cargo-about --version 0.9.3 --features cli --locked
 bun run desktop:package
 ```
 
-Packaging audits dependencies and includes the README, project license, generated third-party notices, build provenance, and `SHA256SUMS`. Output is under the Cargo target directory's `packages/<native-target>/<version>-<run>/`, respecting `CARGO_TARGET_DIR`. The workflow uploads preview artifacts without publishing a release. Automatic updates are not included.
+Packaging audits dependencies and includes the README, project license, generated third-party notices, build provenance, and `SHA256SUMS`. Output is under the Cargo target directory's `packages/<native-target>/<version>-<run>/`, respecting `CARGO_TARGET_DIR`. The workflow uploads build artifacts without publishing a release.
+
+To build an update, run **Desktop packages** manually on `main` with **updater** enabled. This needs the `TAURI_SIGNING_PRIVATE_KEY` secret (plus `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key has one) and a `RUSTOR_UPDATER_PUBLIC_KEY` variable matching `apps/desktop/src-tauri/updater.pub`. The run signs the updater asset for each platform and assembles a verified `latest.json`; `bun run updater:manifest` does the same locally from downloaded packages. Publish the packages, their `.sig` files and `latest.json` on a GitHub release tagged `v<version>`. Installed apps read `releases/latest/download/latest.json`, so the newest release must carry the manifest.
 
 Linux distribution compatibility and bundled system-library notices need review before a public release.
 

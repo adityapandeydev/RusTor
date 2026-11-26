@@ -214,7 +214,8 @@ async fn rejects_html_redirects_encoding_and_both_body_size_overflows() {
                 "Location: http://127.0.0.1:1/not-followed\r\n",
                 "",
             ),
-            ProviderFailure::Unavailable,
+            // Redirects are never followed; the endpoint is reported as moved.
+            ProviderFailure::Moved,
         ),
         (
             response(
