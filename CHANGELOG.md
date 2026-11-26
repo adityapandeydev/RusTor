@@ -8,6 +8,7 @@
 - Update YTS to its current API hosts (`movies-api.accel.li`, `yts.pw`, `yts.rs`) and cover image hosts; retire `yts.mx` and `yts.am`.
 - Explain source failures in Discover: could not connect (a VPN or another network may help), blocked by the site's bot check, moved, or unavailable. Sources with several mirrors report the most specific reason.
 - Correct the README's description of tray mode, in-app updates and where to download releases.
+- Update `url` (RUSTSEC-2026-0592) and `cookie` (RUSTSEC-2026-0594) to patched releases so the release audit passes.
 
 ### Removed
 
