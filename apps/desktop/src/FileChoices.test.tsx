@@ -5,7 +5,14 @@ import { useState } from "react";
 import { FileChoices } from "./FileChoices";
 
 afterEach(cleanup);
-it("keeps selections across pages and search while rendering at most 100 checkboxes", async () => {
+// Role queries compute accessibility for every rendered row; with 100+ rows that
+// is slow on shared CI runners. Count inputs directly and look up the few named
+// controls by label, skipping the per-element visibility scan.
+const checkboxes = (root: HTMLElement) =>
+  root.querySelectorAll('input[type="checkbox"]');
+const button = (name: string) =>
+  screen.getByRole("button", { name, hidden: true });
+it("keeps selections across pages and search while rendering at most 100 checkboxes", { timeout: 20_000 }, async () => {
   const user = userEvent.setup();
   const files = Array.from({ length: 205 }, (_, index) => ({
     index,
@@ -26,25 +33,21 @@ it("keeps selections across pages and search while rendering at most 100 checkbo
       />
     );
   }
-  render(<Harness />);
-  expect(screen.getAllByRole("checkbox")).toHaveLength(100);
+  const { container } = render(<Harness />);
+  expect(checkboxes(container)).toHaveLength(100);
   await user.click(screen.getByLabelText("folder/file-0.bin"));
-  await user.click(screen.getByRole("button", { name: "Next files" }));
+  await user.click(button("Next files"));
   expect(
     screen.getByLabelText("folder/file-100.bin"),
   ).toHaveProperty("checked", true);
-  await user.click(screen.getByRole("textbox", { name: "Find files in torrent" }));
+  await user.click(screen.getByLabelText("Find files in torrent"));
   await user.paste("file-0.bin");
-  expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+  expect(checkboxes(container)).toHaveLength(1);
   expect(
     screen.getByLabelText("folder/file-0.bin"),
   ).toHaveProperty("checked", false);
-  await user.click(
-    screen.getByRole("button", { name: "Clear selection" }),
-  );
+  await user.click(button("Clear selection"));
   expect(screen.getByText(/0 of 205 selected/)).toBeDefined();
-  await user.click(
-    screen.getByRole("button", { name: "Select all files" }),
-  );
+  await user.click(button("Select all files"));
   expect(screen.getByText(/205 of 205 selected/)).toBeDefined();
 });
